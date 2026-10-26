@@ -1,0 +1,2 @@
+# iCalendar uses CRLF line endings on disk and over HTTP.
+*.ics text eol=crlf whitespace=cr-at-eol

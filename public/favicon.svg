@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 156 156">
+  <rect width="156" height="156" fill="#fff"/>
+  <g transform="translate(0 31)" fill="#0560FF">
+    <defs><g id="butterfly"><path d="M-1-1C-5-9-12-15-19-14C-21-6-17 2-8 5C-15 5-17 11-13 16C-7 19-2 13 0 7C2 13 7 19 13 16C17 11 15 5 8 5C17 2 21-6 19-14C12-15 5-9 1-1Z"/><path d="M0 12V-5M-1-4L-4-8M1-4L4-8" fill="none" stroke="#0560FF" stroke-width="1.6" stroke-linecap="round"/><circle cy="-4" r="1.7"/></g></defs>
+    <use href="#butterfly" x="27" y="16"/><use href="#butterfly" x="78" y="16"/><use href="#butterfly" x="129" y="16"/>
+    <path d="M0 46H156V61H0ZM0 76H156V91H0Z"/>
+  </g>
+</svg>

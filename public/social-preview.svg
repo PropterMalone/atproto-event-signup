@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <title>DC Bluesky happy hour</title>
+  <desc>Come meet the pocket friends. Tuesday, November 10, 2026, 6–9 p.m. at Sudhouse, 1340 U St NW, Washington, DC.</desc>
+  <rect width="1200" height="630" fill="#fff"/>
+  <rect width="16" height="630" fill="#0560FF"/>
+  <g id="community-mark" transform="translate(80 70) scale(1.25)" fill="#0560FF">
+    <defs><g id="butterfly"><path d="M-1-1C-5-9-12-15-19-14C-21-6-17 2-8 5C-15 5-17 11-13 16C-7 19-2 13 0 7C2 13 7 19 13 16C17 11 15 5 8 5C17 2 21-6 19-14C12-15 5-9 1-1Z"/><path d="M0 12V-5M-1-4L-4-8M1-4L4-8" fill="none" stroke="#0560FF" stroke-width="1.6" stroke-linecap="round"/><circle cy="-4" r="1.7"/></g></defs>
+    <use href="#butterfly" x="27" y="16"/><use href="#butterfly" x="78" y="16"/><use href="#butterfly" x="129" y="16"/>
+    <path d="M0 46H156V61H0ZM0 76H156V91H0Z"/>
+  </g>
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="1120" y="99" text-anchor="end" fill="#0560FF" font-size="25" font-weight="600">dcbsky.com</text>
+    <g fill="#10233F" font-size="76" font-weight="700" letter-spacing="-2">
+      <text x="76" y="287">DC Bluesky</text>
+      <text x="76" y="374">happy hour</text>
+    </g>
+    <text x="80" y="430" fill="#526176" font-size="30">Come meet the pocket friends.</text>
+    <text x="80" y="515" fill="#0560FF" font-size="33" font-weight="700">Tue, Nov 10 · 6–9 p.m.</text>
+    <text x="80" y="562" fill="#10233F" font-size="28">Sudhouse · 1340 U St NW</text>
+    <text x="1120" y="562" text-anchor="end" fill="#526176" font-size="22">Washington, DC · 2026</text>
+  </g>
+</svg>

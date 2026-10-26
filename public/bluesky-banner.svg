@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="500" viewBox="0 0 1500 500">
+<title>DC Bluesky community banner</title>
+<desc>Three blue butterflies over two bars, inspired by the DC flag. DC Bluesky. Come meet the pocket friends. dcbsky.com.</desc>
+<rect width="1500" height="500" fill="#fff"/>
+<rect width="1500" height="12" fill="#0560FF"/>
+<g transform="translate(116 112) scale(2.35)" fill="#0560FF">
+<defs><g id="butterfly"><path d="M-1-1C-5-9-12-15-19-14C-21-6-17 2-8 5C-15 5-17 11-13 16C-7 19-2 13 0 7C2 13 7 19 13 16C17 11 15 5 8 5C17 2 21-6 19-14C12-15 5-9 1-1Z"/><path d="M0 12V-5M-1-4L-4-8M1-4L4-8" fill="none" stroke="#0560FF" stroke-width="1.6" stroke-linecap="round"/><circle cy="-4" r="1.7"/></g></defs>
+<use href="#butterfly" x="27" y="16"/><use href="#butterfly" x="78" y="16"/><use href="#butterfly" x="129" y="16"/>
+<path d="M0 46H156V61H0ZM0 76H156V91H0Z"/>
+</g>
+<g font-family="DejaVu Sans, sans-serif">
+<text x="580" y="210" fill="#10233F" font-size="88" font-weight="700" letter-spacing="-2">DC Bluesky</text>
+<text x="586" y="280" fill="#526176" font-size="35">Come meet the pocket friends.</text>
+<text x="588" y="350" fill="#0560FF" font-size="32" font-weight="600">dcbsky.com</text>
+</g>
+</svg>

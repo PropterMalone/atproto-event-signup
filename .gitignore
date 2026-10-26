@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+.data/
+.backups/
+private/
+*.sqlite*
+*.tsbuildinfo
+.DS_Store
