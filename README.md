@@ -1,10 +1,29 @@
 # AT Protocol event signup
 
-A small self-hosted event page with Bluesky sign-in and private SQLite storage. Built for a DC community happy hour; the public page in this repository is the worked example, not a hosted signup service for other events.
+A small event page with Bluesky sign-in and private SQLite storage. Built for a DC community happy hour; the public page in this repository is the worked example. You can run your own copy or ask about free hosting below.
 
 **AT Protocol verifies identity. RSVPs do not become public records on attendees' PDSes.** The organizer stores individual responses, optional profile-picture button artwork and an independent future-contact preference in a private local database. No email collection, public attendee list, automated DMs or automatic posting.
 
 This repository contains the application, tests and public page assets. It contains **no attendee records, signup database, credentials, private correspondence or original workspace history**. MIT licensed.
+
+## Want this for your Bluesky meetup?
+
+If you’d like to use this, I’m happy to set it up and host it for free to get you started. You can move it to your own hosting later if you want—the code is open source, and your event’s data can move with it.
+
+It gives you a meetup page with Bluesky sign-in, private RSVPs, an optional profile-picture button designer, and an opt-in for future meetup updates. No email addresses to collect and no public attendee list.
+
+**Send me:**
+
+- The event name, date, time and timezone, venue, and a short description.
+- The Bluesky handle of whoever will manage signups.
+- Whether you want the button designer and future-meetup opt-in.
+- Your preferred URL. If you own a domain, you keep control of it; I’ll tell you what DNS records to add.
+
+I’ll handle the technical setup. You check the page before sharing it and handle the event itself, including any button printing. We’ll agree on how long to keep the page and signup data. While I’m hosting, I’ll also hold the private data and backups.
+
+Contact [@proptermalone.bsky.social on Bluesky](https://bsky.app/profile/proptermalone.bsky.social) about hosting. Don’t put attendee lists, credentials or other private data in a public GitHub issue. Hosting starts by agreement, not automatically when you clone this repository.
+
+Prefer to run it yourself? Start below.
 
 ## Quick start
 
