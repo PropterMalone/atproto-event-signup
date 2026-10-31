@@ -1,0 +1,33 @@
+{
+	"name": "Hill Valley Bluesky meetup",
+	"community": "A Hill Valley community get-together",
+	"tagline": "Come meet the pocket friends.",
+	"description": "Meet your Hill Valley Bluesky neighbors.",
+	"origin": "https://meetup.example.com",
+	"startAt": "1955-11-05T18:00:00-08:00",
+	"endAt": "1955-11-05T21:00:00-08:00",
+	"timeZone": "America/Los_Angeles",
+	"locale": "en-US",
+	"calendarUid": "19551105-hill-valley-meetup@example.com",
+	"venue": {
+		"name": "Doc Brown's house",
+		"address": "1640 Riverside Drive",
+		"url": "https://venue.example.com/"
+	},
+	"branding": {
+		"name": "Hill Valley Bluesky",
+		"shortName": "Hill Valley",
+		"color": "#0560ff",
+		"mark": "/favicon.svg",
+		"markAlt": "Three blue butterflies above two bars, inspired by the DC flag",
+		"favicon": "/favicon.svg",
+		"favicon32": "/favicon-32.png",
+		"appleTouchIcon": "/apple-touch-icon.png",
+		"icon192": "/icon-192.png",
+		"icon512": "/icon-512.png",
+		"socialImage": "/social-preview.png",
+		"socialImageAlt": "Three blue butterflies above two bars, inspired by the DC flag",
+		"socialImageWidth": 1200,
+		"socialImageHeight": 630
+	}
+}

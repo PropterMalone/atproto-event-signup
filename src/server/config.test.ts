@@ -1,8 +1,49 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { readAdminDids, readPolicyConfig } from "./config.js";
+import { parseEventConfig, readAdminDids, readPolicyConfig } from "./config.js";
 
-const deletion = "2026-11-24T23:59:59-05:00";
+const deletion = "1955-11-05T23:59:59-08:00";
 const admin = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+
+describe("public event configuration", () => {
+	const event = JSON.parse(readFileSync("event.json", "utf8"));
+	it("validates the checked-in example", () => {
+		expect(parseEventConfig(event)).toEqual(event);
+	});
+	it.each([
+		null,
+		[],
+		"event",
+		{ ...event, venue: null },
+		{ ...event, branding: [] },
+	])("rejects malformed event objects", (input) => {
+		expect(() => parseEventConfig(input)).toThrow("Event config");
+	});
+	it.each([
+		{ name: "" },
+		{ description: "line\nbreak" },
+		{ origin: "https://example.com/path" },
+		{ startAt: "1955-11-05" },
+		{ startAt: "1955-11-05T18:00:00" },
+		{ endAt: event.startAt },
+		{ startAt: "1955-02-30T18:00:00Z" },
+		{ startAt: "1955-11-05T24:00:00Z" },
+		{ timeZone: "Invalid/Zone" },
+		{ locale: "invalid_locale" },
+		{ venue: { ...event.venue, url: "javascript:alert(1)" } },
+		{ venue: { ...event.venue, url: "https://user:password@example.com" } },
+		{ branding: { ...event.branding, color: "red" } },
+		{ branding: { ...event.branding, mark: "/../private.svg" } },
+		{ branding: { ...event.branding, mark: "https://example.com/mark.svg" } },
+		{ branding: { ...event.branding, socialImage: "/social.svg" } },
+		{ branding: { ...event.branding, favicon: "/favicon.png" } },
+		{ branding: { ...event.branding, icon192: "/icon.svg" } },
+		{ branding: { ...event.branding, socialImageWidth: 0 } },
+		{ branding: { ...event.branding, socialImageHeight: 1.5 } },
+	])("rejects invalid event values: %j", (changes) => {
+		expect(() => parseEventConfig({ ...event, ...changes })).toThrow();
+	});
+});
 
 describe("administrator allowlist configuration", () => {
 	it("grants nobody access when unset or blank, including HTTPS", () => {
@@ -52,36 +93,39 @@ describe("administrator allowlist configuration", () => {
 describe("startup policy configuration", () => {
 	it("allows HTTPS with attendance and buttons open and an explicit artwork deletion date", () => {
 		expect(
-			readPolicyConfig({ APP_ORIGIN: "https://dcbsky.com", ARTWORK_DELETE_AT: deletion }),
+			readPolicyConfig({
+				APP_ORIGIN: "https://hill-valley.example.com",
+				ARTWORK_DELETE_AT: deletion,
+			}),
 		).toEqual({
-			origin: "https://dcbsky.com",
+			origin: "https://hill-valley.example.com",
 			responseCutoff: null,
 			buttonCutoff: null,
 			artworkDeleteAt: Date.parse(deletion),
 		});
 	});
 	it("requires only the artwork deletion date for HTTPS", () => {
-		expect(() => readPolicyConfig({ APP_ORIGIN: "https://dcbsky.com" })).toThrow(
+		expect(() => readPolicyConfig({ APP_ORIGIN: "https://hill-valley.example.com" })).toThrow(
 			"ARTWORK_DELETE_AT",
 		);
 		expect(readPolicyConfig({}).artworkDeleteAt).toBeNull();
 	});
 	it("accepts explicit cutoffs and blank optional cutoffs", () => {
 		const value = readPolicyConfig({
-			APP_ORIGIN: "https://dcbsky.com",
+			APP_ORIGIN: "https://hill-valley.example.com",
 			RESPONSE_CUTOFF: "",
-			BUTTON_CUTOFF: "2026-11-09T12:00:00-05:00",
+			BUTTON_CUTOFF: "1955-11-05T12:00:00-08:00",
 			ARTWORK_DELETE_AT: deletion,
 		});
 		expect(value.responseCutoff).toBeNull();
-		expect(value.buttonCutoff).toBe(Date.parse("2026-11-09T12:00:00-05:00"));
+		expect(value.buttonCutoff).toBe(Date.parse("1955-11-05T12:00:00-08:00"));
 	});
 	it.each([
 		"RESPONSE_CUTOFF",
 		"BUTTON_CUTOFF",
 		"ARTWORK_DELETE_AT",
 	])("rejects malformed %s", (name) => {
-		for (const value of ["tomorrow", "2026-11-24", "2026-11-24T23:59:59", "24 Nov 2026Z"])
+		for (const value of ["tomorrow", "1955-11-05", "1955-11-05T23:59:59", "5 Nov 1955Z"])
 			expect(() => readPolicyConfig({ [name]: value })).toThrow(name);
 	});
 	it("requires deletion after an explicit button cutoff, not an attendance cutoff", () => {
@@ -89,16 +133,16 @@ describe("startup policy configuration", () => {
 			readPolicyConfig({ BUTTON_CUTOFF: deletion, ARTWORK_DELETE_AT: deletion }),
 		).toThrow("after the button cutoff");
 		expect(
-			readPolicyConfig({ RESPONSE_CUTOFF: "2026-12-01T00:00:00Z", ARTWORK_DELETE_AT: deletion })
+			readPolicyConfig({ RESPONSE_CUTOFF: "2015-10-21T00:00:00Z", ARTWORK_DELETE_AT: deletion })
 				.responseCutoff,
 		).not.toBeNull();
 	});
 	it("accepts past dates so restarts can perform cleanup", () => {
 		expect(
 			readPolicyConfig({
-				APP_ORIGIN: "https://dcbsky.com",
-				ARTWORK_DELETE_AT: "2020-01-01T00:00:00Z",
+				APP_ORIGIN: "https://hill-valley.example.com",
+				ARTWORK_DELETE_AT: "1955-11-05T23:59:59Z",
 			}).artworkDeleteAt,
-		).toBe(Date.parse("2020-01-01T00:00:00Z"));
+		).toBe(Date.parse("1955-11-05T23:59:59Z"));
 	});
 });

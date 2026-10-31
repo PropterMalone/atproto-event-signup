@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buttonApproval, defaultButtonLabel } from "../shared/button.js";
 import { type AppConfig, createApp } from "./app.js";
 import { readAdminDids } from "./config.js";
+import { loadEventConfig } from "./event.js";
 import type { OAuthBoundary } from "./oauth.js";
 import { Store } from "./store.js";
 
@@ -39,6 +40,7 @@ beforeEach(async () => {
 	db = new Store(join(directory, "test.sqlite"));
 	config = {
 		origin: "",
+		event: await loadEventConfig(),
 		adminDids: new Set([admin]),
 		responseCutoff: null,
 		buttonCutoff: null,
@@ -119,6 +121,52 @@ async function state(cookie: string) {
 	return (await request("/api/me", "GET", undefined, cookie)).json();
 }
 describe("HTTP identity and privacy", () => {
+	it("serves alternate event copy, calendar and manifest from the same config", async () => {
+		config.publicDirectory = join(process.cwd(), "public");
+		config.event = {
+			...config.event,
+			name: "Back to the Future meetup",
+			community: "Hill Valley time travelers",
+			tagline: "Meet local friends.",
+			description: "An independent meetup.",
+			startAt: "1955-11-05T18:00:00Z",
+			endAt: "1955-11-05T21:00:00Z",
+			timeZone: "Europe/London",
+			locale: "en-GB",
+			calendarUid: "19551105-time-travelers@example.com",
+			venue: {
+				name: "Doc Brown's house",
+				address: "1640 Riverside Drive",
+				url: "https://venue.example.com/",
+			},
+			branding: {
+				...config.event.branding,
+				name: "Back to the Future",
+				shortName: "Time travelers",
+				markAlt: "Community mark",
+				socialImageAlt: "Meetup artwork",
+			},
+		};
+		const page = await request("/");
+		expect(page.status).toBe(200);
+		expect(page.headers.get("content-security-policy")).toContain("manifest-src 'self'");
+		const html = await page.text();
+		expect(html).toContain("Back to the Future meetup");
+		expect(html).toContain("Saturday, 5 November 1955");
+		expect(html).toContain("1640 Riverside Drive");
+		expect(html).toContain("18:00–21:00 GMT");
+		expect(html).toContain(`${origin}/social-preview.png`);
+		expect(html).not.toMatch(/Hill Valley Bluesky|\{\{/);
+		const calendar = await request("/happy-hour.ics");
+		expect(calendar.headers.get("content-type")).toBe("text/calendar; charset=utf-8");
+		expect(await calendar.text()).toContain("DTSTART:19551105T180000Z");
+		const manifest = await request("/site.webmanifest");
+		expect(JSON.parse(await manifest.text())).toMatchObject({
+			name: "Back to the Future",
+			short_name: "Time travelers",
+		});
+		expect((await request("/event.json")).status).toBe(404);
+	});
 	it("grants no operator privileges when ADMIN_DIDS is unset", async () => {
 		config.adminDids = readAdminDids({});
 		const cookie = await login(admin);

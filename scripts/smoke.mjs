@@ -3,7 +3,10 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Window } from "happy-dom";
+import { calendarDate, loadEventConfig } from "../dist/server/event.js";
 
+const eventConfig = await loadEventConfig();
 const directory = await mkdtemp(join(tmpdir(), "dcbsky-smoke-"));
 const port = 31987;
 const origin = `http://127.0.0.1:${port}`;
@@ -29,33 +32,52 @@ try {
 	const page = await fetch(origin);
 	assert.equal(page.status, 200);
 	const pageHtml = await page.text();
-	assert.match(pageHtml, /DC Bluesky happy hour/);
-	assert.match(pageHtml, /property="og:type" content="website"/);
-	assert.match(pageHtml, /property="og:url" content="https:\/\/dcbsky\.com\/"/);
-	assert.match(
-		pageHtml,
-		/property="og:image" content="https:\/\/dcbsky\.com\/social-preview\.png"/,
-	);
-	assert.match(pageHtml, /property="og:image:width" content="1200"/);
-	assert.match(pageHtml, /property="og:image:height" content="630"/);
-	assert.match(pageHtml, /property="og:image:alt" content="Three blue butterflies/);
-	assert.match(pageHtml, /name="twitter:card" content="summary_large_image"/);
-	const calendarLink = pageHtml.match(/href="(https:\/\/calendar\.google\.com[^"]+)"/);
+	const parser = new Window({
+		settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true },
+	}).DOMParser;
+	const document = new parser().parseFromString(pageHtml, "text/html");
+	const meta = (key) =>
+		document.querySelector(`meta[property="${key}"], meta[name="${key}"]`)?.getAttribute("content");
+	assert.equal(document.querySelector("h1")?.textContent, eventConfig.name);
+	assert.equal(meta("og:type"), "website");
+	assert.equal(meta("og:title"), eventConfig.name);
+	assert.equal(meta("og:url"), `${origin}/`);
+	assert.equal(meta("og:image"), `${origin}${eventConfig.branding.socialImage}`);
+	assert.equal(meta("og:image:width"), String(eventConfig.branding.socialImageWidth));
+	assert.equal(meta("og:image:height"), String(eventConfig.branding.socialImageHeight));
+	assert.ok(meta("og:image:alt").includes(eventConfig.branding.socialImageAlt));
+	assert.equal(meta("twitter:card"), "summary_large_image");
+	assert.ok(!pageHtml.includes("{{"));
+	const calendarLink = document
+		.querySelector('a[href^="https://calendar.google.com"]')
+		?.getAttribute("href");
 	assert.ok(calendarLink);
-	const googleEvent = new URL(calendarLink[1].replaceAll("&amp;", "&"));
+	const googleEvent = new URL(calendarLink);
 	assert.equal(googleEvent.searchParams.get("action"), "TEMPLATE");
-	assert.equal(googleEvent.searchParams.get("dates"), "20261110T230000Z/20261111T020000Z");
-	assert.equal(googleEvent.searchParams.get("ctz"), "America/New_York");
-	assert.equal(googleEvent.searchParams.get("location"), "Sudhouse, 1340 U St NW, Washington, DC");
+	assert.equal(googleEvent.searchParams.get("text"), eventConfig.name);
+	assert.equal(
+		googleEvent.searchParams.get("dates"),
+		`${calendarDate(eventConfig.startAt)}/${calendarDate(eventConfig.endAt)}`,
+	);
+	assert.equal(googleEvent.searchParams.get("ctz"), eventConfig.timeZone);
+	assert.equal(
+		googleEvent.searchParams.get("location"),
+		`${eventConfig.venue.name}, ${eventConfig.venue.address}`,
+	);
 	for (const asset of ["/app.js", "/style.css"])
 		assert.equal((await fetch(origin + asset)).status, 200);
 	for (const [path, type] of [
-		["/social-preview.png", "image/png"],
-		["/favicon.svg", "image/svg+xml"],
-		["/favicon-32.png", "image/png"],
-		["/apple-touch-icon.png", "image/png"],
-		["/icon-192.png", "image/png"],
-		["/icon-512.png", "image/png"],
+		...[
+			...new Set([
+				eventConfig.branding.mark,
+				eventConfig.branding.favicon,
+				eventConfig.branding.favicon32,
+				eventConfig.branding.appleTouchIcon,
+				eventConfig.branding.icon192,
+				eventConfig.branding.icon512,
+				eventConfig.branding.socialImage,
+			]),
+		].map((path) => [path, path.endsWith(".svg") ? "image/svg+xml" : "image/png"]),
 		["/site.webmanifest", "application/manifest+json; charset=utf-8"],
 	]) {
 		const response = await fetch(origin + path);
@@ -64,18 +86,18 @@ try {
 		const body = Buffer.from(await response.arrayBuffer());
 		if (type === "image/png")
 			assert.deepEqual(body.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), path);
-		if (path === "/social-preview.png") {
-			assert.equal(body.readUInt32BE(16), 1200);
-			assert.equal(body.readUInt32BE(20), 630);
+		if (path === eventConfig.branding.socialImage) {
+			assert.equal(body.readUInt32BE(16), eventConfig.branding.socialImageWidth);
+			assert.equal(body.readUInt32BE(20), eventConfig.branding.socialImageHeight);
 			assert.equal(response.headers.get("set-cookie"), null);
 			assert.equal(response.headers.get("x-content-type-options"), "nosniff");
 			assert.ok(response.headers.get("content-security-policy").includes("img-src 'self' data:"));
 		}
-		if (path === "/favicon.svg") assert.match(body.toString(), /#0560FF/i);
 		if (path === "/site.webmanifest") {
 			const manifest = JSON.parse(body.toString());
-			assert.equal(manifest.name, "DC Bluesky");
-			assert.equal(manifest.short_name, "DC Bluesky");
+			assert.equal(manifest.name, eventConfig.branding.name);
+			assert.equal(manifest.short_name, eventConfig.branding.shortName);
+			assert.equal(manifest.theme_color, eventConfig.branding.color);
 			assert.equal(manifest.display, "browser");
 		}
 	}
@@ -83,10 +105,9 @@ try {
 	assert.equal(calendar.status, 200);
 	assert.equal(calendar.headers.get("content-type"), "text/calendar; charset=utf-8");
 	const event = await calendar.text();
-	assert.match(event, /DTSTART:20261110T230000Z/);
-	assert.match(event, /DTEND:20261111T020000Z/);
-	assert.match(event, /LOCATION:Sudhouse/);
-	assert.match(event, /UID:20261110-happy-hour@dcbsky.com/);
+	assert.ok(event.includes(`DTSTART:${calendarDate(eventConfig.startAt)}`));
+	assert.ok(event.includes(`DTEND:${calendarDate(eventConfig.endAt)}`));
+	assert.ok(event.includes(`UID:${eventConfig.calendarUid}`));
 	assert.ok(event.includes("\r\n"));
 	assert.equal((await fetch(`${origin}/favicon.ico`)).status, 404);
 	assert.equal((await (await fetch(`${origin}/api/me`)).json()).profile, null);
@@ -94,6 +115,7 @@ try {
 		assert.equal((await fetch(origin + path)).status, 401);
 	for (const path of [
 		"/.env",
+		"/event.json",
 		"/docs/design.md",
 		"/private/test",
 		"/app.sqlite",
@@ -103,7 +125,9 @@ try {
 		"/%2e%2e%2f.env",
 	])
 		assert.equal((await fetch(origin + path)).status, 404);
-	assert.equal((await (await fetch(`${origin}/client-metadata.json`)).json()).scope, "atproto");
+	const metadata = await (await fetch(`${origin}/client-metadata.json`)).json();
+	assert.equal(metadata.scope, "atproto");
+	assert.equal(metadata.client_name, eventConfig.name);
 	assert.equal((await (await fetch(`${origin}/jwks.json`)).json()).keys[0].d, undefined);
 	console.log(
 		"Packaged HTTP smoke passed: health, landing/assets, signed-out state, admin denial, private-file denial, minimal OAuth metadata and public-only JWKS.",

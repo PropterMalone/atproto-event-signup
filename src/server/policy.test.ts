@@ -57,15 +57,17 @@ describe("strict boundaries", () => {
 			expect(approvedAvatarUrl(url)).toBe(false);
 	});
 	it("validates origins and handles without accepting endpoints or credentials", () => {
-		expect(validateOrigin("https://dcbsky.com")).toBe("https://dcbsky.com");
+		expect(validateOrigin("https://hill-valley.example.com")).toBe(
+			"https://hill-valley.example.com",
+		);
 		expect(validateOrigin("http://127.0.0.1:3000")).toBe("http://127.0.0.1:3000");
 		for (const origin of [
 			"invalid",
 			"http://example.com",
-			"https://dcbsky.com/",
-			"https://dcbsky.com/x",
-			"https://a@dcbsky.com",
-			"https://dcbsky.com?x",
+			"https://hill-valley.example.com/",
+			"https://hill-valley.example.com/x",
+			"https://a@hill-valley.example.com",
+			"https://hill-valley.example.com?x",
 		])
 			expect(() => validateOrigin(origin)).toThrow();
 		expect(safeHandle("@alice.bsky.social")).toBe("alice.bsky.social");

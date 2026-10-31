@@ -1,6 +1,6 @@
 # AT Protocol event signup
 
-A small event page with Bluesky sign-in and private SQLite storage. Built for a DC community happy hour; the public page in this repository is the worked example. You can run your own copy or ask about free hosting below.
+A small event page with Bluesky sign-in and private SQLite storage. Originally built for a DC community happy hour; the default config now uses a fictional Back to the Future meetup in Hill Valley. You can run your own copy or ask about free hosting below.
 
 **AT Protocol verifies identity. RSVPs do not become public records on attendees' PDSes.** The organizer stores individual responses, optional profile-picture button artwork and an independent future-contact preference in a private local database. No email collection, public attendee list, automated DMs or automatic posting.
 
@@ -52,21 +52,24 @@ Open http://127.0.0.1:3000 . Local OAuth follows the AT Protocol loopback conven
 
 ## Adapt the example
 
-This is a working single-event app, not a generic event platform. The sample retains public **DC Bluesky / November10,2026 / Sudhouse** branding so you can see the actual page that inspired it. Before inviting people to your own deployment, replace all sample event facts and links:
+This is a working single-event app, not a generic event platform. The default is a fictional **Hill Valley Bluesky meetup / November 5, 1955 / Doc Brown's house, 1640 Riverside Drive** from Back to the Future. It runs from 6 to 9 p.m. Pacific time. The alternate timezone tests also use October 21, 2015 to retain daylight-saving coverage. Before inviting people to your own deployment, replace all sample event facts and links:
 
-1. `public/index.html`: visible text, date/time, venue, address, Google Calendar URL, social metadata, privacy and retention copy.
-2. `public/happy-hour.ics`: event UID, title, timezone-aware date/time, location and URL. Create a new UID for a different event.
-3. `public/social-preview.svg` and `.png`: social card. SVG is editable source; regenerate the PNG after changing it. An installed SVG renderer such as `rsvg-convert` works; it is not needed to run the app.
-4. `public/favicon.svg`, icon PNGs, `site.webmanifest` and CSS: branding. Optional `bluesky-avatar`/`bluesky-banner` sources are account artwork from the example, not runtime features.
-5. `.env`: your origin, private storage directories, **ADMIN_DIDS**, artwork deadline and optional cutoffs/print dimensions. The example deadline is illustrative, not a retention policy chosen for your event. Tests intentionally check sample copy and artwork; update their expectations when customizing.
+1. `event.json`: event name, community line, invitation, description, public origin, start/end timestamps, IANA timezone, locale, venue name/address/website, calendar UID and branding. The server renders visible copy, accessible labels, social metadata, Google Calendar links, the `.ics` download, web manifest and OAuth display name from this one file. Create a new calendar UID for a different event; keep it stable when correcting the same event.
+2. Branding assets: put your mark, favicon, icon PNGs and social-preview PNG in `public/`, then set their paths, descriptions, dimensions and primary color in `event.json`. Paths must name root-level PNG/SVG files. The build copies only configured assets. Configuring the text does not redraw text embedded in existing images: replace or regenerate the social card separately. Optional `bluesky-avatar`/`bluesky-banner` sources are account artwork from the example, not runtime features.
+3. `.env`: private storage directories, **ADMIN_DIDS**, artwork deadline and optional cutoffs/print dimensions. These operational/privacy settings remain separate from public event copy. The example deadline is illustrative, not a retention policy chosen for your event.
 
-The app's OAuth metadata, public-profile fetching and labels also contain the sample service name; search the source for `DC Bluesky`, `dcbsky.com`, `Sudhouse` and `2026` when adapting it. Domain strings in tests are fixtures, not deployment configuration. Do not send attendees to the sample event accidentally.
+`public/index.html` is now a template, not a file to customize for each event. Calendar and manifest responses are generated, not separately maintained static files. Dates are displayed using `timeZone` and `locale`; timestamps must include `Z` or an explicit offset. For Manchester use `Europe/London` and `en-GB`. Winter uses GMT, while summer uses BST; enter the correct offset for the intended date. The page, Google Calendar and `.ics` describe the same instants.
+
+The config is validated and loaded once at startup. Edit it and restart the app to change text or dates; rebuild when changing asset paths or artwork. `EVENT_CONFIG` selects a different JSON file (absolute paths recommended on a server); it defaults to `event.json` in the working directory. The same setting is used by the build and smoke test. Deploy that config alongside `dist/`, dependency manifests and the backup script, or point `EVENT_CONFIG` to your chosen file. Keep credentials and attendee data out of this public-copy config.
+
+The checked-in event details are fictional and the `example.com` URLs are placeholders, not a live event. The existing artwork is still from the original DC example and must be replaced for your event. Domain strings in tests are fixtures, not deployment configuration. Generic consent, deletion and operator authorization behavior is not overridden by event text.
 
 ## Configuration and HTTPS
 
 `.env.example` lists supported environment settings. Keep actual `.env` files out of source control.
 
-- `APP_ORIGIN`: exact public origin without trailing slash/path. Local default is `http://127.0.0.1:3000`; production requires HTTPS. The server listens only on loopback.
+- `EVENT_CONFIG`: path to the public event JSON config, default `event.json` relative to the working directory.
+- `APP_ORIGIN`: optional override of the config's exact origin, without trailing slash/path; useful for local development (`http://127.0.0.1:3000`). The override also updates public metadata and calendar URLs. Production requires HTTPS. The server listens only on loopback.
 - `ADMIN_DIDS`: comma-separated verified account DIDs allowed into operator APIs. Blank means nobody has operator access. Configure your own DID; no original organizer identity is privileged in this export. Handles can change; authorization uses the verified DID, never a browser-provided identity.
 - `DATA_DIR`: private persistent directory; defaults to ignored `.data/`. One process only. Keep `app.sqlite` and `oauth-key.json` stable across restarts.
 - `ARTWORK_DELETE_AT`: required for HTTPS and backups; ISO timestamp with explicit timezone. Choose it deliberately and make the public copy match. `RESPONSE_CUTOFF` and `BUTTON_CUTOFF` are optional. Withdrawal, deletion and contact-preference management remain available after cutoffs.
