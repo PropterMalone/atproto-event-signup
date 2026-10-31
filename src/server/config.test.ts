@@ -1,6 +1,8 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Ajv } from "ajv";
+import { fullFormats } from "ajv-formats/dist/formats.js";
 import { describe, expect, it } from "vitest";
 import { parseEventConfig, readAdminDids, readPolicyConfig } from "./config.js";
 import { artworkIssues, launchIssues, launchReport } from "./preflight.js";
@@ -102,8 +104,93 @@ describe("launch-only checks", () => {
 
 describe("public event configuration", () => {
 	const event = JSON.parse(readFileSync("event.json", "utf8"));
+	const schema = JSON.parse(readFileSync("event.schema.json", "utf8"));
+	const ajv = new Ajv({ strictTypes: false, allErrors: true });
+	for (const [name, format] of Object.entries(fullFormats)) ajv.addFormat(name, format);
+	const validate = ajv.compile(schema);
 	it("validates the checked-in example", () => {
+		expect(event.$schema).toBe("./event.schema.json");
+		expect(validate(event), JSON.stringify(validate.errors)).toBe(true);
 		expect(parseEventConfig(event)).toEqual(event);
+	});
+	it("accepts config files without editor metadata", () => {
+		const { $schema: _schema, ...plain } = event;
+		expect(validate(plain)).toBe(true);
+		expect(parseEventConfig(plain)).toEqual(plain);
+	});
+	it("keeps actual timezone validity and cross-field date ordering in runtime validation", () => {
+		for (const input of [
+			{ ...event, endAt: event.startAt },
+			{ ...event, timeZone: "Invalid/Zone" },
+			{ ...event, locale: "invalid_locale" },
+		]) {
+			expect(validate(input)).toBe(true);
+			expect(() => parseEventConfig(input)).toThrow();
+		}
+	});
+	it("provides descriptions and valid autocomplete examples for every leaf field", () => {
+		const properties = [
+			schema.properties,
+			schema.properties.venue.properties,
+			schema.properties.branding.properties,
+		];
+		for (const fields of properties) {
+			for (const field of Object.values(fields) as Record<string, unknown>[]) {
+				expect(typeof field.description).toBe("string");
+				if (field.type === "object") continue;
+				expect(Array.isArray(field.examples)).toBe(true);
+				const validateField = ajv.compile({ ...field, definitions: schema.definitions });
+				for (const example of field.examples as unknown[])
+					expect(validateField(example), JSON.stringify(validateField.errors)).toBe(true);
+			}
+		}
+	});
+	it.each([
+		{ ...event, venuee: event.venue },
+		{ ...event, venue: { ...event.venue, adress: "1640 Riverside Drive" } },
+		{ ...event, branding: { ...event.branding, colour: "#0560ff" } },
+		{ ...event, ADMIN_DIDS: admin },
+		{ ...event, $schema: 123 },
+	])("rejects unknown keys and invalid schema metadata in the editor and app", (input) => {
+		expect(validate(input)).toBe(false);
+		expect(() => parseEventConfig(input)).toThrow();
+	});
+	it("marks every event and nested config field as required", () => {
+		for (const field of schema.required) {
+			const incomplete = { ...event };
+			delete incomplete[field];
+			expect(validate(incomplete), field).toBe(false);
+			expect(() => parseEventConfig(incomplete), field).toThrow();
+		}
+		for (const section of ["venue", "branding"]) {
+			for (const field of schema.properties[section].required) {
+				const incomplete = { ...event, [section]: { ...event[section] } };
+				delete incomplete[section][field];
+				expect(validate(incomplete), `${section}.${field}`).toBe(false);
+				expect(() => parseEventConfig(incomplete), `${section}.${field}`).toThrow();
+			}
+		}
+	});
+	it.each([
+		{ name: " " },
+		{ description: "line\nbreak" },
+		{ origin: "https://example.com/path" },
+		{ origin: "https://user:password@example.com" },
+		{ startAt: "1955-11-05" },
+		{ startAt: "1955-02-30T18:00:00Z" },
+		{ startAt: "1955-11-05T24:00:00Z" },
+		{ venue: { ...event.venue, url: "javascript:alert(1)" } },
+		{ venue: { ...event.venue, url: "https://user:password@example.com/" } },
+		{ branding: { ...event.branding, color: "blue" } },
+		{ branding: { ...event.branding, mark: "/../private.svg" } },
+		{ branding: { ...event.branding, favicon: "/favicon.png" } },
+		{ branding: { ...event.branding, icon192: "/icon.svg" } },
+		{ branding: { ...event.branding, socialImageWidth: 0 } },
+		{ branding: { ...event.branding, socialImageHeight: 1.5 } },
+	])("keeps shared schema constraints aligned with runtime validation: %j", (changes) => {
+		const input = { ...event, ...changes };
+		expect(validate(input)).toBe(false);
+		expect(() => parseEventConfig(input)).toThrow();
 	});
 	it.each([
 		null,

@@ -1,6 +1,7 @@
 import { validateOrigin } from "./policy.js";
 
 export interface EventConfig {
+	$schema?: string;
 	name: string;
 	community: string;
 	tagline: string;
@@ -31,9 +32,15 @@ export interface EventConfig {
 }
 
 export function parseEventConfig(input: unknown): EventConfig {
-	function object(value: unknown, label: string): Record<string, unknown> {
+	function object(
+		value: unknown,
+		label: string,
+		fields: readonly string[],
+	): Record<string, unknown> {
 		if (!value || typeof value !== "object" || Array.isArray(value))
 			throw Error(`Event config ${label} must be an object`);
+		if (Object.keys(value).some((field) => !fields.includes(field)))
+			throw Error(`Event config ${label} contains unknown fields`);
 		return value as Record<string, unknown>;
 	}
 	function text(value: unknown, label: string): string {
@@ -48,9 +55,38 @@ export function parseEventConfig(input: unknown): EventConfig {
 			throw Error(`Event config ${label} must be nonempty text without control characters`);
 		return value;
 	}
-	const root = object(input, "root");
-	const venue = object(root.venue, "venue");
-	const branding = object(root.branding, "branding");
+	const root = object(input, "root", [
+		"$schema",
+		"name",
+		"community",
+		"tagline",
+		"description",
+		"origin",
+		"startAt",
+		"endAt",
+		"timeZone",
+		"locale",
+		"calendarUid",
+		"venue",
+		"branding",
+	]);
+	const venue = object(root.venue, "venue", ["name", "address", "url"]);
+	const branding = object(root.branding, "branding", [
+		"name",
+		"shortName",
+		"color",
+		"mark",
+		"markAlt",
+		"favicon",
+		"favicon32",
+		"appleTouchIcon",
+		"icon192",
+		"icon512",
+		"socialImage",
+		"socialImageAlt",
+		"socialImageWidth",
+		"socialImageHeight",
+	]);
 	const values: Record<string, string> = {};
 	for (const field of [
 		"name",
@@ -138,7 +174,12 @@ export function parseEventConfig(input: unknown): EventConfig {
 			throw Error(`Event config branding.${field} must be an integer between 1 and 4096`);
 		brandValues[field] = value;
 	}
-	return { ...values, venue: venueValues, branding: brandValues } as unknown as EventConfig;
+	return {
+		...values,
+		...(root.$schema === undefined ? {} : { $schema: text(root.$schema, "$schema") }),
+		venue: venueValues,
+		branding: brandValues,
+	} as unknown as EventConfig;
 }
 
 export function readAdminDids(env: NodeJS.ProcessEnv): Set<string> {

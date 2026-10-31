@@ -1,0 +1,359 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Bluesky Meetup Event Configuration",
+	"description": "Public details and branding for one event. Keep credentials, organizer authorization and retention settings in the private environment file. Runtime validation checks actual timezones, normalized origins and date ordering; preflight checks launch readiness.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": [
+		"name",
+		"community",
+		"tagline",
+		"description",
+		"origin",
+		"startAt",
+		"endAt",
+		"timeZone",
+		"locale",
+		"calendarUid",
+		"venue",
+		"branding"
+	],
+	"properties": {
+		"$schema": {
+			"description": "Editor schema reference. Use ./event.schema.json when the schema is beside this config. This is metadata, not a runtime network request.",
+			"examples": ["./event.schema.json"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"name": {
+			"description": "Full event name, used in the page heading, social card, calendar and OAuth sign-in screen.",
+			"examples": ["Hill Valley Bluesky meetup"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"community": {
+			"description": "Short community line displayed above the event heading.",
+			"examples": ["A Hill Valley community get-together"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"tagline": {
+			"description": "Short invitation below the heading and on the social card.",
+			"examples": ["Come meet the pocket friends."],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"description": {
+			"description": "Plain-text event description for social metadata and calendar details. Do not use HTML.",
+			"examples": ["Meet your Hill Valley Bluesky neighbors."],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"origin": {
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			],
+			"format": "uri",
+			"pattern": "^(?:https://[^/?#@]+|http://127\\.0\\.0\\.1(?::[0-9]+)?)$",
+			"description": "Exact public HTTPS origin, without a trailing slash, path, credentials, query or fragment. Local development may use http://127.0.0.1:PORT. APP_ORIGIN can override it at runtime; align both for launch.",
+			"examples": ["https://meetup.example.com", "http://127.0.0.1:3000"]
+		},
+		"startAt": {
+			"description": "Event start instant with seconds and an explicit offset or Z. Use the correct offset for the intended local date, including daylight-saving time.",
+			"examples": ["1955-11-05T18:00:00-08:00"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/timestamp"
+				}
+			]
+		},
+		"endAt": {
+			"description": "Event end instant, strictly after startAt. Cross-field ordering is checked by the app.",
+			"examples": ["1955-11-05T21:00:00-08:00"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/timestamp"
+				}
+			]
+		},
+		"timeZone": {
+			"description": "IANA timezone used to display event dates and times. The app checks that the timezone exists; this does not change the instants in startAt/endAt.",
+			"examples": ["America/Los_Angeles", "Europe/London", "UTC"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"locale": {
+			"description": "BCP 47 locale for date/time formatting and the HTML language attribute. The app checks locale validity.",
+			"examples": ["en-US", "en-GB"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"calendarUid": {
+			"description": "Stable, unique calendar event identifier. Keep it when correcting the same event; create a new one for a different event. It is not a URL.",
+			"examples": ["19551105-hill-valley-meetup@example.com"],
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			]
+		},
+		"venue": {
+			"type": "object",
+			"description": "Venue details used on the page, social card and calendars.",
+			"additionalProperties": false,
+			"required": ["name", "address", "url"],
+			"properties": {
+				"name": {
+					"description": "Venue name.",
+					"examples": ["Doc Brown's house"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					]
+				},
+				"address": {
+					"description": "Complete visitor-facing street address, including city when needed.",
+					"examples": ["1640 Riverside Drive"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					]
+				},
+				"url": {
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					],
+					"format": "uri",
+					"pattern": "^https://[^/?#@]+(?:[/?#].*)?$",
+					"description": "Public HTTPS venue website, without credentials.",
+					"examples": ["https://venue.example.com/"]
+				}
+			}
+		},
+		"branding": {
+			"type": "object",
+			"description": "Public branding assets. Paths must name root-level PNG/SVG files in public/. The build and preflight check the actual files.",
+			"additionalProperties": false,
+			"required": [
+				"name",
+				"shortName",
+				"color",
+				"mark",
+				"markAlt",
+				"favicon",
+				"favicon32",
+				"appleTouchIcon",
+				"icon192",
+				"icon512",
+				"socialImage",
+				"socialImageAlt",
+				"socialImageWidth",
+				"socialImageHeight"
+			],
+			"properties": {
+				"name": {
+					"description": "Community name for the web manifest and the first social-card title line when it prefixes the event name.",
+					"examples": ["Hill Valley Bluesky"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					]
+				},
+				"shortName": {
+					"description": "Compact web-manifest name.",
+					"examples": ["Hill Valley"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					]
+				},
+				"color": {
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					],
+					"pattern": "^#[a-fA-F0-9]{6}$",
+					"description": "Primary UI/theme color in six-digit hexadecimal notation. Does not recolor the logo.",
+					"examples": ["#0560ff"]
+				},
+				"mark": {
+					"description": "Main community mark, also embedded in the generated social card.",
+					"examples": ["/favicon.svg"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/logoAsset"
+						}
+					]
+				},
+				"markAlt": {
+					"description": "Accessible description of the main mark.",
+					"examples": ["Bluesky butterfly logo"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					]
+				},
+				"favicon": {
+					"description": "SVG favicon.",
+					"examples": ["/favicon.svg"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/svgAsset"
+						}
+					]
+				},
+				"favicon32": {
+					"description": "32 by 32 pixel PNG favicon.",
+					"examples": ["/favicon-32.png"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/pngAsset"
+						}
+					]
+				},
+				"appleTouchIcon": {
+					"description": "180 by 180 pixel PNG Apple touch icon.",
+					"examples": ["/apple-touch-icon.png"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/pngAsset"
+						}
+					]
+				},
+				"icon192": {
+					"description": "192 by 192 pixel PNG web-manifest icon.",
+					"examples": ["/icon-192.png"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/pngAsset"
+						}
+					]
+				},
+				"icon512": {
+					"description": "512 by 512 pixel PNG web-manifest icon.",
+					"examples": ["/icon-512.png"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/pngAsset"
+						}
+					]
+				},
+				"socialImage": {
+					"description": "Social-card PNG. /social-preview.png is generated from the config at build time; a different path uses your supplied image unchanged.",
+					"examples": ["/social-preview.png"],
+					"allOf": [
+						{
+							"$ref": "#/definitions/pngAsset"
+						}
+					]
+				},
+				"socialImageAlt": {
+					"description": "Accessible image description. The app appends the event name and details.",
+					"examples": [
+						"Event information card with the Bluesky butterfly logo on a white background"
+					],
+					"allOf": [
+						{
+							"$ref": "#/definitions/text"
+						}
+					]
+				},
+				"socialImageWidth": {
+					"description": "Actual social-card width in pixels, also used by the default card generator.",
+					"examples": [1200],
+					"allOf": [
+						{
+							"$ref": "#/definitions/imageDimension"
+						}
+					]
+				},
+				"socialImageHeight": {
+					"description": "Actual social-card height in pixels, also used by the default card generator.",
+					"examples": [630],
+					"allOf": [
+						{
+							"$ref": "#/definitions/imageDimension"
+						}
+					]
+				}
+			}
+		}
+	},
+	"definitions": {
+		"text": {
+			"type": "string",
+			"minLength": 1,
+			"maxLength": 2000,
+			"pattern": "^(?=.*\\S)[^\\u0000-\\u001f\\u007f]*$"
+		},
+		"timestamp": {
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			],
+			"format": "date-time",
+			"pattern": "^\\d{4}-\\d\\d-\\d\\dT(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$"
+		},
+		"pngAsset": {
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			],
+			"pattern": "^/[a-zA-Z0-9_-]+\\.png$"
+		},
+		"svgAsset": {
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			],
+			"pattern": "^/[a-zA-Z0-9_-]+\\.svg$"
+		},
+		"logoAsset": {
+			"allOf": [
+				{
+					"$ref": "#/definitions/text"
+				}
+			],
+			"pattern": "^/[a-zA-Z0-9_-]+\\.(?:svg|png)$"
+		},
+		"imageDimension": {
+			"type": "integer",
+			"minimum": 1,
+			"maximum": 4096
+		}
+	}
+}

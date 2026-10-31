@@ -1,4 +1,5 @@
 {
+	"$schema": "./event.schema.json",
 	"name": "Hill Valley Bluesky meetup",
 	"community": "A Hill Valley community get-together",
 	"tagline": "Come meet the pocket friends.",
