@@ -13,6 +13,7 @@
 		"build": "tsc -p tsconfig.build.json && esbuild src/browser/main.ts --bundle --format=esm --target=es2022 --outfile=dist/public/app.js && node scripts/copy-public.mjs",
 		"start": "node --env-file-if-exists=.env dist/server/main.js",
 		"smoke": "node scripts/smoke.mjs",
+		"preflight": "node --env-file-if-exists=.env scripts/preflight.mjs",
 		"backup": "node --env-file-if-exists=.env scripts/backup.mjs",
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage --passWithNoTests",

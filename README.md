@@ -109,6 +109,27 @@ The app scrubs artwork while running; stopping it delays cleanup until restart/r
 
 Restore while the app is stopped into a new private directory, with matching policy/origin and both database and key. Never overlay a running database or mix old WAL/SHM files. After the artwork deadline, restore only sanitized post-deadline backups. Verify operator authorization, private records and a real OAuth login before reopening collection.
 
+## Pre-launch check
+
+After building, check the environment you intend to deploy:
+
+```sh
+npm run build
+npm run preflight
+```
+
+The command loads `.env` if present and the config selected by `EVENT_CONFIG` (default `event.json`). It checks the effective `APP_ORIGIN`, placeholder/loopback URLs, fictional sample copy, ended event dates, organizer DID syntax/access configuration, missing or expired artwork retention, and cutoff/deletion timing. It also checks configured artwork in `PUBLIC_DIR` (default `dist/public`) for readability, basic PNG/SVG format markers and required PNG dimensions. It does not alter files, open the signup database, fetch private artwork or log environment values.
+
+Errors are launch blockers and exit with status 1; warnings require organizer review but exit with status 0 if there are no blockers. The historical Hill Valley example and local HTTP origin deliberately fail this launch-only check, while remaining valid for development and tests. `ARTWORK_DELETE_AT` must be after the event ends for this launch workflow. The command reminds you that attendance/contact retention and downloaded artwork require separate decisions.
+
+To use a separate production environment file without changing local development settings:
+
+```sh
+node --env-file=/path/to/production.env scripts/preflight.mjs
+```
+
+Run it from the application directory containing the built `dist/` folder. Set `EVENT_CONFIG` and `PUBLIC_DIR` in that environment file if they are elsewhere. A clean report does not verify DNS/HTTPS reachability, actual organizer account ownership, a real OAuth login, complete image decoding, backup restoration, dependency safety or trademark permission. Perform those launch checks separately. This command is advisory and does not replace runtime validation or automatically open registration.
+
 ## Development checks
 
 ```sh

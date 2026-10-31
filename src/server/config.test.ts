@@ -1,9 +1,104 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseEventConfig, readAdminDids, readPolicyConfig } from "./config.js";
+import { artworkIssues, launchIssues, launchReport } from "./preflight.js";
 
 const deletion = "1955-11-05T23:59:59-08:00";
 const admin = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+
+describe("launch-only checks", () => {
+	const example = parseEventConfig(JSON.parse(readFileSync("event.json", "utf8")));
+	const launchEvent = {
+		...example,
+		name: "Time travelers meetup",
+		community: "An independent meetup",
+		tagline: "Meet local friends.",
+		description: "Community get-together",
+		origin: "https://meetup.community.org",
+		startAt: "2015-10-21T18:00:00-07:00",
+		endAt: "2015-10-21T21:00:00-07:00",
+		venue: {
+			name: "Community hall",
+			address: "1640 Riverside Drive",
+			url: "https://venue.community.org/",
+		},
+	};
+	const launchEnv = { ADMIN_DIDS: admin, ARTWORK_DELETE_AT: "2015-10-21T23:59:59-07:00" };
+	const now = Date.parse("2015-10-21T12:00:00-07:00");
+	it("flags the historical example for launch without rejecting it as development config", () => {
+		const event = parseEventConfig(JSON.parse(readFileSync("event.json", "utf8")));
+		expect(parseEventConfig(event)).toEqual(event);
+		const issues = launchIssues(event, {}, Date.parse("2015-10-21T00:00:00Z"));
+		expect(issues.map((issue) => issue.code)).toEqual(
+			expect.arrayContaining([
+				"placeholder-url",
+				"sample-copy",
+				"event-ended",
+				"no-organizer",
+				"missing-retention",
+			]),
+		);
+	});
+	it("allows a ready config while reminding the organizer about separate retention", () => {
+		const issues = launchIssues(launchEvent, launchEnv, now);
+		expect(issues.filter((issue) => issue.level === "error")).toEqual([]);
+		expect(issues.map((issue) => issue.code)).toEqual(["sample-copy", "retention-scope"]);
+		expect(launchReport(issues).exitCode).toBe(0);
+	});
+	it("makes blockers fail the command while warnings remain nonblocking", () => {
+		const report = launchReport([
+			{ level: "error", code: "no-organizer", message: "Configure organizer access." },
+			{ level: "warning", code: "retention-scope", message: "Review separate retention." },
+		]);
+		expect(report.exitCode).toBe(1);
+		expect(report.lines).toContain("Pre-launch check: 1 blocker(s), 1 warning(s).");
+		expect(launchReport([]).exitCode).toBe(0);
+	});
+	it.each([
+		[{ ADMIN_DIDS: "invalid" }, "invalid-organizer"],
+		[{ APP_ORIGIN: "http://127.0.0.1:3000" }, "https-required"],
+		[{ APP_ORIGIN: "not a URL" }, "invalid-url"],
+		[{ ARTWORK_DELETE_AT: "2015-10-21T01:00:00-07:00" }, "retention-expired"],
+		[{ ARTWORK_DELETE_AT: launchEvent.startAt }, "retention-before-event-end"],
+		[{ ARTWORK_DELETE_AT: "invalid timestamp" }, "invalid-policy"],
+		[{ BUTTON_CUTOFF: "2015-10-21T23:59:59-07:00" }, "invalid-policy"],
+		[{ RESPONSE_CUTOFF: "2015-10-21T01:00:00-07:00" }, "cutoff-passed"],
+		[{ RESPONSE_CUTOFF: "2015-10-21T23:59:59-07:00" }, "cutoff-after-event"],
+		[{ APP_ORIGIN: "https://other.community.org" }, "origin-mismatch"],
+	])("reports launch-policy problems without exposing environment values: %j", (changes, code) => {
+		const issues = launchIssues(
+			launchEvent,
+			{ ...launchEnv, ...changes, CLOUDFLARE_ORIGIN_SECRET: "do-not-log-this" },
+			now,
+		);
+		expect(issues.some((issue) => issue.code === code)).toBe(true);
+		expect(JSON.stringify(issues)).not.toContain("do-not-log-this");
+	});
+	it("accepts the built-in artwork and detects metadata size mismatches", async () => {
+		expect(await artworkIssues(example, "public")).toEqual([]);
+		const issues = await artworkIssues(
+			{ ...example, branding: { ...example.branding, socialImageWidth: 100 } },
+			"public",
+		);
+		expect(issues.map((issue) => issue.code)).toEqual(["artwork-dimensions"]);
+	});
+	it("reports missing and invalid image files without reading runtime data", async () => {
+		const directory = mkdtempSync(join(tmpdir(), "meetup-preflight-"));
+		try {
+			writeFileSync(join(directory, "favicon.svg"), "not an image");
+			writeFileSync(join(directory, "favicon-32.png"), "invalid PNG");
+			writeFileSync(join(directory, "icon-192.png"), "");
+			const issues = await artworkIssues(example, directory);
+			expect(issues.map((issue) => issue.code)).toEqual(
+				expect.arrayContaining(["invalid-artwork", "missing-artwork"]),
+			);
+		} finally {
+			rmSync(directory, { recursive: true });
+		}
+	});
+});
 
 describe("public event configuration", () => {
 	const event = JSON.parse(readFileSync("event.json", "utf8"));
