@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import { describe, expect, it } from "vitest";
 import { parseEventConfig } from "../server/config.js";
-import { calendarDate, eventCalendar, eventManifest, renderEventPage } from "../server/event.js";
+import {
+	calendarDate,
+	eventCalendar,
+	eventManifest,
+	renderEventPage,
+	renderSocialPreview,
+} from "../server/event.js";
 
 const window = new Window({
 	settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true },
@@ -133,7 +139,7 @@ describe("public social preview", () => {
 		);
 		expect(eventCalendar(event, origin)).toContain(`URL;VALUE=URI:${origin}/`);
 	});
-	it("uses the official generic Bluesky butterfly consistently in every vector asset", () => {
+	it("uses the official generic Bluesky butterfly consistently in logo-only vector assets", () => {
 		const source = readFileSync("public/favicon.svg", "utf8");
 		const logo = new DOMParser().parseFromString(source, "image/svg+xml");
 		expect(logo.documentElement.getAttribute("viewBox")).toBe("0 0 568 501");
@@ -141,8 +147,61 @@ describe("public social preview", () => {
 		expect(logo.querySelector("path")?.getAttribute("fill")).toBe("#006AFF");
 		expect(logo.querySelector("path")?.getAttribute("d")).toMatch(/^M123\.121 33\.6637/);
 		expect(logo.querySelector("text, use, image, script")).toBeNull();
-		for (const file of ["social-preview.svg", "bluesky-avatar.svg", "bluesky-banner.svg"])
+		for (const file of ["bluesky-avatar.svg", "bluesky-banner.svg"])
 			expect(readFileSync(`public/${file}`, "utf8")).toBe(source);
+	});
+	it("restores the social-card event information with the configured placeholder details", () => {
+		const logo = readFileSync("public/favicon.svg", "utf8");
+		const svg = renderSocialPreview(event, logo);
+		const preview = new DOMParser().parseFromString(svg, "image/svg+xml");
+		expect(preview.documentElement.getAttribute("viewBox")).toBe("0 0 1200 630");
+		expect(preview.querySelector("title")?.textContent).toBe(event.name);
+		const copy = preview.documentElement.textContent;
+		for (const value of [
+			event.branding.name,
+			event.tagline,
+			event.venue.name,
+			event.venue.address,
+			"Nov 5",
+			"1955",
+			"6:00 PM",
+			"9:00 PM",
+			new URL(event.origin).host,
+		])
+			expect(copy).toContain(value);
+		expect(preview.querySelector("image")?.getAttribute("href")).toBe(
+			`data:image/svg+xml;base64,${Buffer.from(logo).toString("base64")}`,
+		);
+		expect(svg).not.toMatch(/DC Bluesky|Sudhouse|November 10|2026/);
+	});
+	it("updates the card copy from alternate config and escapes it safely", () => {
+		const alternate = {
+			...event,
+			name: "Time travelers & friends",
+			tagline: "Meet <friends>.",
+			startAt: "2015-10-21T18:00:00-07:00",
+			endAt: "2015-10-21T21:00:00-07:00",
+			venue: { ...event.venue, name: "Doc & Marty" },
+		};
+		const preview = new DOMParser().parseFromString(
+			renderSocialPreview(alternate, readFileSync("public/favicon.svg", "utf8")),
+			"image/svg+xml",
+		);
+		expect(preview.querySelector("title")?.textContent).toBe(alternate.name);
+		expect(preview.documentElement.textContent).toContain("Oct 21");
+		expect(preview.documentElement.textContent).toContain("2015");
+		expect(preview.documentElement.textContent).toContain(alternate.tagline);
+		expect(preview.querySelector("friends")).toBeNull();
+	});
+	it("embeds configured PNG logos without treating their bytes as SVG text", () => {
+		const logo = readFileSync("public/favicon-32.png");
+		const preview = new DOMParser().parseFromString(
+			renderSocialPreview(event, logo, "image/png"),
+			"image/svg+xml",
+		);
+		expect(preview.querySelector("image")?.getAttribute("href")).toBe(
+			`data:image/png;base64,${logo.toString("base64")}`,
+		);
 	});
 	it.each([
 		["favicon-32.png", 32, 32],

@@ -1,3 +1,15 @@
-<svg width="568" height="501" viewBox="0 0 568 501" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M123.121 33.6637C188.241 82.5526 258.281 181.681 284 234.873C309.719 181.681 379.759 82.5526 444.879 33.6637C491.866 -1.61183 568 -28.9064 568 57.9464C568 75.2916 558.055 203.659 552.222 224.501C531.947 296.954 458.067 315.434 392.347 304.249C507.222 323.8 536.444 388.56 473.333 453.32C353.473 576.312 301.061 422.461 287.631 383.039C285.169 375.812 284.017 372.431 284 375.306C283.983 372.431 282.831 375.812 280.369 383.039C266.939 422.461 214.527 576.312 94.6667 453.32C31.5556 388.56 60.7778 323.8 175.653 304.249C109.933 315.434 36.0535 296.954 15.7778 224.501C9.94525 203.659 0 75.2916 0 57.9464C0 -28.9064 76.1345 -1.61183 123.121 33.6637Z" fill="#006AFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<title>Hill Valley Bluesky meetup</title>
+<desc>Come meet the pocket friends. Sat, Nov 5, 1955, 6:00 PM to 9:00 PM GMT-8. Doc Brown&#39;s house, 1640 Riverside Drive.</desc>
+<rect width="1200" height="630" fill="#fff"/>
+<rect width="16" height="630" fill="#0560ff"/>
+<image x="80" y="60" width="170" height="150" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTY4IiBoZWlnaHQ9IjUwMSIgdmlld0JveD0iMCAwIDU2OCA1MDEiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xMjMuMTIxIDMzLjY2MzdDMTg4LjI0MSA4Mi41NTI2IDI1OC4yODEgMTgxLjY4MSAyODQgMjM0Ljg3M0MzMDkuNzE5IDE4MS42ODEgMzc5Ljc1OSA4Mi41NTI2IDQ0NC44NzkgMzMuNjYzN0M0OTEuODY2IC0xLjYxMTgzIDU2OCAtMjguOTA2NCA1NjggNTcuOTQ2NEM1NjggNzUuMjkxNiA1NTguMDU1IDIwMy42NTkgNTUyLjIyMiAyMjQuNTAxQzUzMS45NDcgMjk2Ljk1NCA0NTguMDY3IDMxNS40MzQgMzkyLjM0NyAzMDQuMjQ5QzUwNy4yMjIgMzIzLjggNTM2LjQ0NCAzODguNTYgNDczLjMzMyA0NTMuMzJDMzUzLjQ3MyA1NzYuMzEyIDMwMS4wNjEgNDIyLjQ2MSAyODcuNjMxIDM4My4wMzlDMjg1LjE2OSAzNzUuODEyIDI4NC4wMTcgMzcyLjQzMSAyODQgMzc1LjMwNkMyODMuOTgzIDM3Mi40MzEgMjgyLjgzMSAzNzUuODEyIDI4MC4zNjkgMzgzLjAzOUMyNjYuOTM5IDQyMi40NjEgMjE0LjUyNyA1NzYuMzEyIDk0LjY2NjcgNDUzLjMyQzMxLjU1NTYgMzg4LjU2IDYwLjc3NzggMzIzLjggMTc1LjY1MyAzMDQuMjQ5QzEwOS45MzMgMzE1LjQzNCAzNi4wNTM1IDI5Ni45NTQgMTUuNzc3OCAyMjQuNTAxQzkuOTQ1MjUgMjAzLjY1OSAwIDc1LjI5MTYgMCA1Ny45NDY0QzAgLTI4LjkwNjQgNzYuMTM0NSAtMS42MTE4MyAxMjMuMTIxIDMzLjY2MzdaIiBmaWxsPSIjMDA2QUZGIi8+Cjwvc3ZnPgo="/>
+<g font-family="DejaVu Sans, Arial, sans-serif">
+<text x="1120" y="99" text-anchor="end" fill="#0560ff" font-size="25" font-weight="600">meetup.example.com</text>
+<text x="76" y="287" fill="#10233f" font-size="76" font-weight="700">Hill Valley Bluesky</text>
+<text x="76" y="374" fill="#10233f" font-size="76" font-weight="700">meetup</text>
+<text x="80" y="430" fill="#526176" font-size="30" font-weight="400">Come meet the pocket friends.</text>
+<text x="80" y="515" fill="#0560ff" font-size="33" font-weight="700">Sat, Nov 5, 1955 · 6:00 PM–9:00 PM GMT-8</text>
+<text x="80" y="562" fill="#10233f" font-size="28" font-weight="400">Doc Brown&#39;s house · 1640 Riverside Drive</text>
+</g>
 </svg>

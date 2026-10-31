@@ -120,3 +120,57 @@ export function eventManifest(event: EventConfig): string {
 		],
 	});
 }
+
+export function renderSocialPreview(
+	event: EventConfig,
+	logo: string | Buffer,
+	logoType = "image/svg+xml",
+): string {
+	const start = new Date(event.startAt);
+	const end = new Date(event.endAt);
+	const date = new Intl.DateTimeFormat(event.locale, {
+		timeZone: event.timeZone,
+		weekday: "short",
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	}).format(start);
+	const time = new Intl.DateTimeFormat(event.locale, {
+		timeZone: event.timeZone,
+		timeStyle: "short",
+	});
+	const zone =
+		new Intl.DateTimeFormat(event.locale, { timeZone: event.timeZone, timeZoneName: "short" })
+			.formatToParts(start)
+			.find((part) => part.type === "timeZoneName")?.value ?? event.timeZone;
+	const prefix = `${event.branding.name} `;
+	const titles = event.name.startsWith(prefix)
+		? [event.branding.name, event.name.slice(prefix.length)]
+		: [event.name];
+	function text(
+		value: string,
+		x: number,
+		y: number,
+		size: number,
+		color: string,
+		weight = 400,
+	): string {
+		const fitted = Math.min(size, Math.floor(1040 / Math.max(1, Array.from(value).length * 0.65)));
+		return `<text x="${x}" y="${y}" fill="${color}" font-size="${fitted}" font-weight="${weight}">${escapeXml(value)}</text>`;
+	}
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${event.branding.socialImageWidth}" height="${event.branding.socialImageHeight}" viewBox="0 0 1200 630">
+<title>${escapeXml(event.name)}</title>
+<desc>${escapeXml(`${event.tagline} ${date}, ${time.format(start)} to ${time.format(end)} ${zone}. ${event.venue.name}, ${event.venue.address}.`)}</desc>
+<rect width="1200" height="630" fill="#fff"/>
+<rect width="16" height="630" fill="${event.branding.color}"/>
+<image x="80" y="60" width="170" height="150" href="data:${logoType};base64,${Buffer.from(logo).toString("base64")}"/>
+<g font-family="DejaVu Sans, Arial, sans-serif">
+<text x="1120" y="99" text-anchor="end" fill="${event.branding.color}" font-size="25" font-weight="600">${escapeXml(new URL(event.origin).host)}</text>
+${text(titles[0] ?? event.name, 76, 287, 76, "#10233f", 700)}
+${titles[1] ? text(titles[1], 76, 374, 76, "#10233f", 700) : ""}
+${text(event.tagline, 80, 430, 30, "#526176")}
+${text(`${date} \u00b7 ${time.format(start)}\u2013${time.format(end)} ${zone}`, 80, 515, 33, event.branding.color, 700)}
+${text(`${event.venue.name} \u00b7 ${event.venue.address}`, 80, 562, 28, "#10233f")}
+</g>
+</svg>`;
+}
