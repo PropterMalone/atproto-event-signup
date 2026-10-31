@@ -133,20 +133,29 @@ describe("public social preview", () => {
 		);
 		expect(eventCalendar(event, origin)).toContain(`URL;VALUE=URI:${origin}/`);
 	});
-	it("keeps the original independent-community mark geometry and blue", () => {
-		const preview = new DOMParser().parseFromString(
-			readFileSync("public/social-preview.svg", "utf8"),
-			"image/svg+xml",
-		);
-		const favicon = new DOMParser().parseFromString(
-			readFileSync("public/favicon.svg", "utf8"),
-			"image/svg+xml",
-		);
-		expect(preview.documentElement.getAttribute("viewBox")).toBe("0 0 1200 630");
-		expect(preview.querySelector("#community-mark")?.getAttribute("fill")).toBe("#0560FF");
-		for (const selector of ["#butterfly path", "#butterfly circle", "use", "g > path"])
-			expect(
-				Array.from(preview.querySelectorAll(selector), (element) => element.outerHTML),
-			).toEqual(Array.from(favicon.querySelectorAll(selector), (element) => element.outerHTML));
+	it("uses the official generic Bluesky butterfly consistently in every vector asset", () => {
+		const source = readFileSync("public/favicon.svg", "utf8");
+		const logo = new DOMParser().parseFromString(source, "image/svg+xml");
+		expect(logo.documentElement.getAttribute("viewBox")).toBe("0 0 568 501");
+		expect(logo.querySelectorAll("path")).toHaveLength(1);
+		expect(logo.querySelector("path")?.getAttribute("fill")).toBe("#006AFF");
+		expect(logo.querySelector("path")?.getAttribute("d")).toMatch(/^M123\.121 33\.6637/);
+		expect(logo.querySelector("text, use, image, script")).toBeNull();
+		for (const file of ["social-preview.svg", "bluesky-avatar.svg", "bluesky-banner.svg"])
+			expect(readFileSync(`public/${file}`, "utf8")).toBe(source);
+	});
+	it.each([
+		["favicon-32.png", 32, 32],
+		["apple-touch-icon.png", 180, 180],
+		["icon-192.png", 192, 192],
+		["icon-512.png", 512, 512],
+		["bluesky-avatar.png", 1000, 1000],
+		["bluesky-banner.png", 1500, 500],
+		["social-preview.png", 1200, 630],
+	])("keeps the generic raster asset %s at its intended dimensions", (file, width, height) => {
+		const bytes = readFileSync(`public/${file}`);
+		expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+		expect(bytes.readUInt32BE(16)).toBe(width);
+		expect(bytes.readUInt32BE(20)).toBe(height);
 	});
 });

@@ -19,14 +19,14 @@
 		"shortName": "Hill Valley",
 		"color": "#0560ff",
 		"mark": "/favicon.svg",
-		"markAlt": "Three blue butterflies above two bars, inspired by the DC flag",
+		"markAlt": "Bluesky butterfly logo",
 		"favicon": "/favicon.svg",
 		"favicon32": "/favicon-32.png",
 		"appleTouchIcon": "/apple-touch-icon.png",
 		"icon192": "/icon-192.png",
 		"icon512": "/icon-512.png",
 		"socialImage": "/social-preview.png",
-		"socialImageAlt": "Three blue butterflies above two bars, inspired by the DC flag",
+		"socialImageAlt": "Bluesky butterfly logo on a white background",
 		"socialImageWidth": 1200,
 		"socialImageHeight": 630
 	}
