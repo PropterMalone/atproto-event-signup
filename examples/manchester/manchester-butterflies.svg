@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 800 480">
+  <title>Greater Manchester-inspired ten-butterfly flag — draft</title>
+  <desc>Ten original gold butterflies arranged three, two, three, two on a red field within a gold battlement border. An unofficial meetup design.</desc>
+  <rect width="800" height="480" fill="#FFD044"/>
+  <path fill="#EF1B2D" d="M25 25H61V48H127V25H163V48H229V25H265V48H331V25H367V48H433V25H469V48H535V25H571V48H637V25H673V48H739V25H775V57H751V124H775V157H751V224H775V257H751V324H775V357H751V424H775V455H739V432H673V455H637V432H571V455H535V432H469V455H433V432H367V455H331V432H265V455H229V432H163V455H127V432H61V455H25V424H49V357H25V324H49V257H25V224H49V157H25V124H49V57H25Z"/>
+  <defs>
+    <g id="butterfly" fill="#FFD044">
+      <path d="M-1-1C-5-9-12-15-19-14C-21-6-17 2-8 5C-15 5-17 11-13 16C-7 19-2 13 0 7C2 13 7 19 13 16C17 11 15 5 8 5C17 2 21-6 19-14C12-15 5-9 1-1Z"/>
+      <path d="M0 12V-5M-1-4L-4-8M1-4L4-8" fill="none" stroke="#FFD044" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cy="-4" r="1.7"/>
+    </g>
+  </defs>
+  <g transform="translate(0 -4)">
+    <use href="#butterfly" transform="translate(167 120) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(400 120) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(633 120) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(284 195) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(516 195) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(167 270) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(400 270) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(633 270) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(284 345) scale(2.5)"/>
+    <use href="#butterfly" transform="translate(516 345) scale(2.5)"/>
+  </g>
+</svg>
