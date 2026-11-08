@@ -109,8 +109,9 @@ try {
 	const event = await calendar.text();
 	assert.ok(event.includes(`DTSTART:${calendarDate(eventConfig.startAt)}`));
 	assert.ok(event.includes(`DTEND:${calendarDate(eventConfig.endAt)}`));
-	if (eventConfig.calendarUid) assert.ok(event.includes(`UID:${eventConfig.calendarUid}`));
-	else assert.match(event, /\r\nUID:draft-[a-f0-9]{32}@[^\r\n]+\r\n/);
+	const unfoldedEvent = event.replace(/\r\n[ \t]/g, "");
+	if (eventConfig.calendarUid) assert.ok(unfoldedEvent.includes(`UID:${eventConfig.calendarUid}`));
+	else assert.match(unfoldedEvent, /\r\nUID:draft-[a-f0-9]{32}@[^\r\n]+\r\n/);
 	assert.ok(event.includes("\r\n"));
 	assert.equal((await fetch(`${origin}/favicon.ico`)).status, 404);
 	const signedOut = await (await fetch(`${origin}/api/me`)).json();
