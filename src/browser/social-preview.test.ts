@@ -190,7 +190,11 @@ describe("public social preview", () => {
 		expect(eventCalendar(event, origin)).toContain(`URL;VALUE=URI:${origin}/`);
 	});
 	it("collapses a TBA venue to one announcement on the social card", () => {
-		const tba = parseEventConfig({ ...event, comingSoon: true, venue: { name: "TBA", address: "TBA", url: "TBA" } });
+		const tba = parseEventConfig({
+			...event,
+			comingSoon: true,
+			venue: { name: "TBA", address: "TBA", url: "TBA" },
+		});
 		const svg = renderSocialPreview(tba, readFileSync("public/favicon.svg", "utf8"));
 		expect(svg).toContain("Venue to be announced soon");
 		expect(svg).not.toContain("TBA");
@@ -213,22 +217,32 @@ describe("public social preview", () => {
 		expect(preview.documentElement.getAttribute("viewBox")).toBe("0 0 1200 630");
 		expect(preview.querySelector("title")?.textContent).toBe(event.name);
 		const copy = preview.documentElement.textContent;
+		const date = new Intl.DateTimeFormat(event.locale, {
+			timeZone: event.timeZone,
+			weekday: "short",
+			month: "short",
+			day: "numeric",
+			year: "numeric",
+		}).format(new Date(event.startAt));
+		const time = new Intl.DateTimeFormat(event.locale, {
+			timeZone: event.timeZone,
+			timeStyle: "short",
+		});
 		for (const value of [
 			event.branding.name,
 			event.tagline,
 			event.venue.name,
 			event.venue.address,
-			"Nov 5",
-			"1955",
-			"6:00 PM",
-			"9:00 PM",
+			date,
+			time.format(new Date(event.startAt)),
+			time.format(new Date(event.endAt)),
 			new URL(event.origin).host,
 		])
 			expect(copy).toContain(value);
 		expect(preview.querySelector("image")?.getAttribute("href")).toBe(
 			`data:image/svg+xml;base64,${Buffer.from(logo).toString("base64")}`,
 		);
-		expect(svg).not.toMatch(/DC Bluesky|Sudhouse|November 10|2026/);
+		expect(svg).not.toMatch(/DC Bluesky|Sudhouse|November 10/);
 	});
 	it("updates the card copy from alternate config and escapes it safely", () => {
 		const alternate = {
@@ -237,6 +251,8 @@ describe("public social preview", () => {
 			tagline: "Meet <friends>.",
 			startAt: "2015-10-21T18:00:00-07:00",
 			endAt: "2015-10-21T21:00:00-07:00",
+			locale: "en-US",
+			timeZone: "America/Los_Angeles",
 			venue: { ...event.venue, name: "Doc & Marty" },
 		};
 		const preview = new DOMParser().parseFromString(

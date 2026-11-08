@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { readFile } from "node:fs/promises";
 import { afterEach, expect, it, vi } from "vitest";
+import { loadEventConfig, renderEventPage } from "../server/event.js";
 import { buttonApproval } from "../shared/button.js";
 import type { ClientState } from "../shared/types.js";
 
@@ -11,7 +12,10 @@ afterEach(() => {
 });
 
 async function setup(version: number) {
-	const html = await readFile("public/index.html", "utf8");
+	const html = renderEventPage(
+		await readFile("public/index.html", "utf8"),
+		await loadEventConfig(),
+	);
 	document.body.innerHTML = html.split("<body>")[1]?.split("</body>")[0] ?? "";
 	const state: ClientState = {
 		profile: {
@@ -72,10 +76,13 @@ async function setup(version: number) {
 	};
 }
 it("preserves version 2 on unrelated saves and previews, approves and reloads Top black text", async () => {
+	const event = await loadEventConfig();
 	const { calls, position, form } = await setup(2);
 	const color = document.getElementById("text-color") as HTMLSelectElement;
 	expect(color.value).toBe("white");
-	expect(document.querySelector('label[for="text-color"]')?.textContent).toBe("Text color");
+	expect(document.querySelector('label[for="text-color"]')?.textContent).toBe(
+		event.copy?.[event.locale]?.textColor ?? "Text color",
+	);
 	expect(document.querySelector("#preview svg")?.getAttribute("data-renderer")).toBe("2");
 	(document.getElementById("future-meetups") as HTMLInputElement).checked = true;
 	form.dispatchEvent(new Event("submit", { cancelable: true }));

@@ -54,7 +54,7 @@ export function renderEventPage(
 		? location
 		: websitePending
 			? `${location}. Website to be announced.`
-		: `${location}. Visit website (opens in a new tab)`;
+			: `${location}. Visit website (opens in a new tab)`;
 	const description = `${event.description} ${dateLabel}, ${timeLabel} at ${location}.`;
 	const locale = Intl.getCanonicalLocales(event.locale)[0] ?? event.locale;
 	const copy = event.copy?.[locale] ?? event.copy?.[locale.split("-")[0] ?? ""];

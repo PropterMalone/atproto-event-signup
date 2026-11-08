@@ -35,7 +35,7 @@ export interface EventConfig {
 	};
 }
 
-export interface EventCopy {
+interface EventCopy {
 	organizersOnly?: string;
 	signupPrivacy?: string;
 	textColor?: string;

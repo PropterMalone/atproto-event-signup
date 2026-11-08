@@ -12,6 +12,38 @@ const admin = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
 
 describe("launch-only checks", () => {
 	const example = parseEventConfig(JSON.parse(readFileSync("event.json", "utf8")));
+	const {
+		copy: _copy,
+		footerText: _footerText,
+		footerLink: _footerLink,
+		...genericExample
+	} = example;
+	const historicalExample = parseEventConfig({
+		...genericExample,
+		comingSoon: false,
+		name: "Hill Valley Bluesky meetup",
+		community: "A Hill Valley community get-together",
+		description: "Meet your Hill Valley Bluesky neighbors.",
+		origin: "https://meetup.example.com",
+		startAt: "1955-11-05T18:00:00-08:00",
+		endAt: "1955-11-05T21:00:00-08:00",
+		timeZone: "America/Los_Angeles",
+		locale: "en-US",
+		calendarUid: "19551105-hill-valley-meetup@example.com",
+		venue: {
+			name: "Doc Brown's house",
+			address: "1640 Riverside Drive",
+			url: "https://venue.example.com/",
+		},
+		branding: {
+			...genericExample.branding,
+			name: "Hill Valley Bluesky",
+			shortName: "Hill Valley",
+			mark: "/favicon.svg",
+			markAlt: "Bluesky butterfly logo",
+			socialImageAlt: "Bluesky butterfly logo on a white background",
+		},
+	});
 	const launchEvent = {
 		...example,
 		comingSoon: false,
@@ -31,7 +63,7 @@ describe("launch-only checks", () => {
 	const launchEnv = { ADMIN_DIDS: admin, ARTWORK_DELETE_AT: "2015-10-21T23:59:59-07:00" };
 	const now = Date.parse("2015-10-21T12:00:00-07:00");
 	it("flags the historical example for launch without rejecting it as development config", () => {
-		const event = parseEventConfig(JSON.parse(readFileSync("event.json", "utf8")));
+		const event = historicalExample;
 		expect(parseEventConfig(event)).toEqual(event);
 		const issues = launchIssues(event, {}, Date.parse("2015-10-21T00:00:00Z"));
 		expect(issues.map((issue) => issue.code)).toEqual(

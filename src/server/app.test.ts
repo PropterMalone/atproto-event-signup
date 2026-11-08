@@ -166,7 +166,7 @@ describe("HTTP identity and privacy", () => {
 		expect(html).toContain('data-coming-soon="true"');
 		expect(html).toContain("Signups coming soon");
 		expect(html).toContain(config.event.description);
-		expect(html).toContain("1640 Riverside Drive");
+		expect(html).toContain(config.event.venue.address);
 		for (const path of [
 			"/meetup.ics",
 			"/social-preview.png",

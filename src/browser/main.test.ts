@@ -12,10 +12,7 @@ afterEach(() => {
 });
 async function page(config?: Awaited<ReturnType<typeof loadEventConfig>>) {
 	const event = config ?? (await loadEventConfig());
-	const html = renderEventPage(
-		await readFile("public/index.html", "utf8"),
-		event,
-	);
+	const html = renderEventPage(await readFile("public/index.html", "utf8"), event);
 	const parser = new Window({
 		settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true },
 	}).DOMParser;
@@ -28,7 +25,8 @@ const tick = async () => {
 	await vi.waitFor(() => expect(document.getElementById("status")?.textContent).toBe(""));
 };
 it("shows coming-soon information without inviting new signups and permits management sign-in", async () => {
-	await page();
+	const event = await loadEventConfig();
+	await page({ ...event, comingSoon: true });
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(
@@ -51,7 +49,7 @@ it("shows coming-soon information without inviting new signups and permits manag
 	expect(document.getElementById("signed-out")?.hidden).toBe(true);
 	expect(document.getElementById("signed-in")?.hidden).toBe(true);
 	expect(document.getElementById("coming-soon")?.textContent).toContain("Signups coming soon");
-	expect(document.body.textContent).toContain("1640 Riverside Drive");
+	expect(document.body.textContent).toContain(event.venue.address);
 	document.getElementById("manage-existing")?.click();
 	expect(document.getElementById("signed-out")?.hidden).toBe(false);
 	expect(document.getElementById("signed-out")?.dataset.managing).toBe("true");
@@ -84,7 +82,8 @@ it("hides empty signup controls for a management-only sign-in", async () => {
 	expect(document.getElementById("logout")?.hidden).toBe(false);
 });
 it("renders signed-out event copy without collecting a response or showing operator data", async () => {
-	await page();
+	const event = await loadEventConfig();
+	await page(event);
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(
@@ -105,9 +104,9 @@ it("renders signed-out event copy without collecting a response or showing opera
 	expect(document.getElementById("signed-out")?.hidden).toBe(false);
 	expect(document.getElementById("signed-in")?.hidden).toBe(true);
 	expect(document.getElementById("operator")?.hidden).toBe(true);
-	expect(document.body.textContent).toContain("November 5");
-	expect(document.body.textContent).toContain("1955");
-	expect(document.body.textContent).toContain("1640 Riverside Drive");
+	expect(document.querySelector("h1")?.textContent).toBe(event.name);
+	expect(document.querySelector("time")?.getAttribute("datetime")).toBe(event.startAt);
+	expect(document.body.textContent).toContain(event.venue.address);
 	expect(document.querySelector('[name="partySize"]')).toBeNull();
 	expect(document.querySelector('input[type="email"]')).toBeNull();
 	expect((document.getElementById("future-meetups") as HTMLInputElement).checked).toBe(false);
