@@ -82,10 +82,10 @@ describe("public social preview", () => {
 		expect(link?.getAttribute("target")).toBe("_blank");
 		expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
 
-		const { footerLink: _footerLink, ...withoutFooterLink } = event;
-		expect(landingPage(withoutFooterLink).querySelector(".footer-info")).toBeNull();
+		const { footerLink: _footerLink, footerText: _footerText, ...withoutFooterInfo } = event;
+		expect(landingPage(withoutFooterInfo).querySelector(".footer-info")).toBeNull();
 		const textOnly = landingPage(
-			parseEventConfig({ ...withoutFooterLink, footerText: "Extra note" }),
+			parseEventConfig({ ...withoutFooterInfo, footerText: "Extra note" }),
 		);
 		expect(textOnly.querySelector(".footer-info")?.textContent).toBe("Extra note");
 		expect(textOnly.querySelector(".footer-info a")).toBeNull();
