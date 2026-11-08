@@ -40,7 +40,7 @@ beforeEach(async () => {
 	db = new Store(join(directory, "test.sqlite"));
 	config = {
 		origin: "",
-		event: await loadEventConfig(),
+		event: { ...(await loadEventConfig()), comingSoon: false },
 		adminDids: new Set([admin]),
 		responseCutoff: null,
 		buttonCutoff: null,
@@ -121,6 +121,159 @@ async function state(cookie: string) {
 	return (await request("/api/me", "GET", undefined, cookie)).json();
 }
 describe("HTTP identity and privacy", () => {
+	it("blocks new signups and contact opt-ins in coming-soon mode, including direct API requests", async () => {
+		config.event.comingSoon = true;
+		const cookie = await login();
+		const current = await state(cookie);
+		expect(current.comingSoon).toBe(true);
+		const response = await request(
+			"/api/response",
+			"PUT",
+			{ attendance: "coming", button: null },
+			cookie,
+			current.csrf,
+		);
+		expect(response.status).toBe(409);
+		const preference = await request(
+			"/api/preferences",
+			"PUT",
+			{ expectedVersion: current.responseVersion, futureMeetups: true },
+			cookie,
+			current.csrf,
+		);
+		expect(preference.status).toBe(409);
+		expect(db.get(identity)).toBeNull();
+		expect(db.preference(identity)).toBeNull();
+		config.event.comingSoon = false;
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+	});
+	it("keeps public event information, calendars and images available while coming soon", async () => {
+		config.event.comingSoon = true;
+		config.publicDirectory = join(process.cwd(), "public");
+		const page = await request("/");
+		expect(page.status).toBe(200);
+		const html = await page.text();
+		expect(html).toContain('data-coming-soon="true"');
+		expect(html).toContain("Signups coming soon");
+		expect(html).toContain(config.event.description);
+		expect(html).toContain("1640 Riverside Drive");
+		for (const path of [
+			"/meetup.ics",
+			"/social-preview.png",
+			"/site.webmanifest",
+			"/client-metadata.json",
+			"/jwks.json",
+		])
+			expect((await request(path)).status).toBe(200);
+	});
+	it("blocks artwork edits but permits artwork withdrawal without unsubscribing", async () => {
+		const cookie = await login();
+		let current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: "pfp", futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		config.event.comingSoon = true;
+		current = await state(cookie);
+		const before = current.response;
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: "handle", label: "Doc Brown", futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(409);
+		expect((await state(cookie)).response).toEqual(before);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null, futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		current = await state(cookie);
+		expect(current.response.artwork).toBeNull();
+		expect(current.futureMeetups).toBe(true);
+	});
+	it("allows existing attendees to unsubscribe, withdraw and delete while coming soon", async () => {
+		const cookie = await login();
+		let current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null, futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		config.event.comingSoon = true;
+		current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/preferences",
+					"PUT",
+					{ expectedVersion: current.responseVersion, futureMeetups: false },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "cant", button: null },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/signup",
+					"DELETE",
+					{ expectedVersion: current.responseVersion },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		expect(db.get(identity)).toBeNull();
+		expect(db.preference(identity)).toBeNull();
+	});
 	it("serves alternate event copy, calendar and manifest from the same config", async () => {
 		config.publicDirectory = join(process.cwd(), "public");
 		config.event = {
@@ -157,7 +310,7 @@ describe("HTTP identity and privacy", () => {
 		expect(html).toContain("18:00–21:00 GMT");
 		expect(html).toContain(`${origin}/social-preview.png`);
 		expect(html).not.toMatch(/Hill Valley Bluesky|\{\{/);
-		const calendar = await request("/happy-hour.ics");
+		const calendar = await request("/meetup.ics");
 		expect(calendar.headers.get("content-type")).toBe("text/calendar; charset=utf-8");
 		expect(await calendar.text()).toContain("DTSTART:19551105T180000Z");
 		const manifest = await request("/site.webmanifest");

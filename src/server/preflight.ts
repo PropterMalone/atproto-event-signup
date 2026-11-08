@@ -40,11 +40,31 @@ export function launchIssues(
 	function add(level: LaunchIssue["level"], code: string, message: string) {
 		issues.push({ level, code, message });
 	}
+	if (event.comingSoon)
+		add(
+			"warning",
+			"coming-soon",
+			"Coming-soon mode is enabled. Public event information is visible, but new signups are not open.",
+		);
+	if (event.comingSoon && event.venue.name === "TBA")
+		add(
+			"warning",
+			"venue-tba",
+			"The venue is to be announced. Set the venue name, address and website before opening registration.",
+		);
 	for (const [field, value] of [
 		["event.origin", event.origin],
 		["venue.url", event.venue.url],
 		["APP_ORIGIN", env.APP_ORIGIN ?? event.origin],
 	]) {
+		if (field === "venue.url" && value === "TBA" && event.comingSoon) {
+			add(
+				"warning",
+				"venue-tba",
+				"The venue website is to be announced. Set a public HTTPS venue URL before opening registration.",
+			);
+			continue;
+		}
 		try {
 			const url = new URL(value ?? "");
 			if (placeholderHost(url.hostname))

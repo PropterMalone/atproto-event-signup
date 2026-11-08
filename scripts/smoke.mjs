@@ -62,7 +62,9 @@ try {
 	assert.equal(googleEvent.searchParams.get("ctz"), eventConfig.timeZone);
 	assert.equal(
 		googleEvent.searchParams.get("location"),
-		`${eventConfig.venue.name}, ${eventConfig.venue.address}`,
+		eventConfig.venue.name === "TBA"
+			? "Venue to be announced soon"
+			: `${eventConfig.venue.name}, ${eventConfig.venue.address}`,
 	);
 	for (const asset of ["/app.js", "/style.css"])
 		assert.equal((await fetch(origin + asset)).status, 200);
@@ -101,16 +103,25 @@ try {
 			assert.equal(manifest.display, "browser");
 		}
 	}
-	const calendar = await fetch(`${origin}/happy-hour.ics`);
+	const calendar = await fetch(`${origin}/meetup.ics`);
 	assert.equal(calendar.status, 200);
 	assert.equal(calendar.headers.get("content-type"), "text/calendar; charset=utf-8");
 	const event = await calendar.text();
 	assert.ok(event.includes(`DTSTART:${calendarDate(eventConfig.startAt)}`));
 	assert.ok(event.includes(`DTEND:${calendarDate(eventConfig.endAt)}`));
-	assert.ok(event.includes(`UID:${eventConfig.calendarUid}`));
+	if (eventConfig.calendarUid) assert.ok(event.includes(`UID:${eventConfig.calendarUid}`));
+	else assert.match(event, /\r\nUID:draft-[a-f0-9]{32}@[^\r\n]+\r\n/);
 	assert.ok(event.includes("\r\n"));
 	assert.equal((await fetch(`${origin}/favicon.ico`)).status, 404);
-	assert.equal((await (await fetch(`${origin}/api/me`)).json()).profile, null);
+	const signedOut = await (await fetch(`${origin}/api/me`)).json();
+	assert.equal(signedOut.profile, null);
+	assert.equal(signedOut.comingSoon, eventConfig.comingSoon ?? false);
+	assert.equal(
+		document.documentElement.getAttribute("data-coming-soon"),
+		String(eventConfig.comingSoon ?? false),
+	);
+	if (eventConfig.comingSoon)
+		assert.ok(document.querySelector("#coming-soon")?.textContent.includes("Signups coming soon"));
 	for (const path of ["/api/admin", "/api/admin/print", "/api/admin/futurecontacts"])
 		assert.equal((await fetch(origin + path)).status, 401);
 	for (const path of [

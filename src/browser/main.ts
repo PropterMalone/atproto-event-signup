@@ -23,6 +23,7 @@ function element<T extends HTMLElement>(id: string): T {
 const status = element("status");
 let state: ClientState;
 let artworkEdited = false;
+let managingExisting = false;
 async function api(path: string, method = "GET", body?: unknown) {
 	const response = await fetch(path, {
 		method,
@@ -48,7 +49,7 @@ function selectedAttendance(): Attendance {
 function preview() {
 	const selected = selectedAttendance();
 	const opt = element<HTMLInputElement>("button-opt-in");
-	opt.disabled = selected === "cant";
+	opt.disabled = selected === "cant" || (!!state.comingSoon && !state.response?.artwork);
 	if (opt.disabled) opt.checked = false;
 	const replacement = element<HTMLInputElement>("replace-artwork").checked;
 	const artwork = state.response?.artwork;
@@ -127,8 +128,15 @@ async function load() {
 	state = (await api("/api/me")) as ClientState;
 	savedSummary();
 	artworkEdited = false;
-	element("signed-out").hidden = !!state.profile;
+	document.documentElement.dataset.comingSoon = String(state.comingSoon ?? false);
+	element("signed-out").dataset.managing = String(managingExisting);
+	element("signed-out").hidden = !!state.profile || (!!state.comingSoon && !managingExisting);
+	element("signin-heading").textContent = state.comingSoon
+		? "Manage existing signup"
+		: "See you there?";
 	element("signed-in").hidden = !state.profile;
+	element("manage-existing").hidden = !!state.profile;
+	element("response").hidden = !!state.comingSoon && !state.response && !state.futureMeetups;
 	element("operator").hidden = !state.admin;
 	if (state.profile) {
 		element("identity").textContent = `Signed in as @${state.profile.handle}`;
@@ -146,6 +154,15 @@ async function load() {
 			state.response?.artwork?.label ??
 			defaultButtonLabel(state.response?.artwork?.handle ?? state.profile.handle);
 		preview();
+		for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="attendance"]'))
+			radio.disabled =
+				!!state.comingSoon && radio.value !== value && radio.value !== "cant" && radio.value !== "";
+		element<HTMLInputElement>("button-opt-in").disabled =
+			selectedAttendance() === "cant" || (!!state.comingSoon && !state.response?.artwork);
+		element<HTMLInputElement>("future-meetups").disabled =
+			!!state.comingSoon && !state.futureMeetups;
+		for (const id of ["style", "text-position", "text-color", "button-label", "replace-artwork"])
+			element<HTMLInputElement | HTMLSelectElement>(id).disabled = !!state.comingSoon;
 	}
 	const date = (value: number) =>
 		new Date(value).toLocaleString("en-US", {
@@ -200,6 +217,12 @@ async function load() {
 		}
 	}
 }
+element("manage-existing").addEventListener("click", () => {
+	managingExisting = true;
+	element("signed-out").dataset.managing = "true";
+	element("signed-out").hidden = false;
+	element<HTMLInputElement>("handle").focus();
+});
 element<HTMLFormElement>("login").addEventListener("submit", async (event) => {
 	event.preventDefault();
 	status.textContent = "Starting Bluesky sign-in…";

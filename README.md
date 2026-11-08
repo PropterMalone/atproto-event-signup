@@ -60,6 +60,14 @@ This is a working single-event app, not a generic event platform. The default is
 
 `public/index.html` is now a template, not a file to customize for each event. Calendar and manifest responses are generated, not separately maintained static files. Dates are displayed using `timeZone` and `locale`; timestamps must include `Z` or an explicit offset. For Manchester use `Europe/London` and `en-GB`. Winter uses GMT, while summer uses BST; enter the correct offset for the intended date. The page, Google Calendar and `.ics` describe the same instants.
 
+### Coming soon
+
+Set `"comingSoon": true` in `event.json` to show the event name, description, dates, venue, calendars and social preview with a "Signups coming soon" notice instead of inviting signups. `calendarUid` may be omitted or empty in this mode; calendar downloads use a deterministic draft UID derived from the configured event name, start instant and origin. Set a permanent, nonempty UID before switching to `false` (or omitting `comingSoon`) to open registration, then rebuild and restart. Preflight reports enabled coming-soon mode as a warning.
+
+While coming soon, `venue.url` may be `"TBA"`. Venue name and address remain visible, but no website link or arrow is rendered; the page says "Website to be announced". Preflight reports this as a warning. Set an HTTPS venue URL before opening registration.
+
+This is not just a hidden form: the server rejects new RSVPs, new artwork approvals and new future-contact opt-ins. Existing attendees may use "Manage existing signup" to sign in, withdraw attendance/artwork, unsubscribe or delete their data. Operator authorization, OAuth identity checks, private lists, cutoff enforcement and artwork expiry remain intact. Sign-in alone still does not submit an RSVP. This app setting does not change an external reverse proxy's maintenance configuration.
+
 ### Config editor support
 
 `event.json` references the local `event.schema.json` through `"$schema": "./event.schema.json"`. VS Code uses it for field suggestions, hover descriptions, example values and validation of required fields, types, dates, URLs, asset paths and dimensions. Unknown fields are rejected at the root and within `venue`/`branding`, both by the schema and by the app, so typos do not silently disappear. Put private environment settings in `.env`, not this config.

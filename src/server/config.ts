@@ -2,6 +2,7 @@ import { validateOrigin } from "./policy.js";
 
 export interface EventConfig {
 	$schema?: string;
+	comingSoon?: boolean;
 	name: string;
 	community: string;
 	tagline: string;
@@ -11,7 +12,7 @@ export interface EventConfig {
 	endAt: string;
 	timeZone: string;
 	locale: string;
-	calendarUid: string;
+	calendarUid?: string;
 	venue: { name: string; address: string; url: string };
 	branding: {
 		name: string;
@@ -57,6 +58,7 @@ export function parseEventConfig(input: unknown): EventConfig {
 	}
 	const root = object(input, "root", [
 		"$schema",
+		"comingSoon",
 		"name",
 		"community",
 		"tagline",
@@ -71,6 +73,8 @@ export function parseEventConfig(input: unknown): EventConfig {
 		"branding",
 	]);
 	const venue = object(root.venue, "venue", ["name", "address", "url"]);
+	if (root.comingSoon !== undefined && typeof root.comingSoon !== "boolean")
+		throw Error("Event config comingSoon must be a boolean");
 	const branding = object(root.branding, "branding", [
 		"name",
 		"shortName",
@@ -98,9 +102,13 @@ export function parseEventConfig(input: unknown): EventConfig {
 		"endAt",
 		"timeZone",
 		"locale",
-		"calendarUid",
 	])
 		values[field] = text(root[field], field);
+	if (root.calendarUid !== undefined || root.comingSoon !== true)
+		values.calendarUid =
+			root.comingSoon === true && root.calendarUid === ""
+				? ""
+				: text(root.calendarUid, "calendarUid");
 	validateOrigin(values.origin ?? "");
 	for (const field of ["startAt", "endAt"]) {
 		const value = values[field] ?? "";
@@ -127,9 +135,11 @@ export function parseEventConfig(input: unknown): EventConfig {
 		address: text(venue.address, "venue.address"),
 		url: text(venue.url, "venue.url"),
 	};
-	const venueUrl = new URL(venueValues.url);
-	if (venueUrl.protocol !== "https:" || venueUrl.username || venueUrl.password)
-		throw Error("Event config venue.url must be a public HTTPS URL");
+	if (!(root.comingSoon === true && venueValues.url === "TBA")) {
+		const venueUrl = new URL(venueValues.url);
+		if (venueUrl.protocol !== "https:" || venueUrl.username || venueUrl.password)
+			throw Error("Event config venue.url must be a public HTTPS URL, or TBA while coming soon");
+	}
 	const brandValues: Record<string, string | number> = {};
 	for (const field of [
 		"name",
@@ -177,6 +187,7 @@ export function parseEventConfig(input: unknown): EventConfig {
 	return {
 		...values,
 		...(root.$schema === undefined ? {} : { $schema: text(root.$schema, "$schema") }),
+		...(root.comingSoon === undefined ? {} : { comingSoon: root.comingSoon }),
 		venue: venueValues,
 		branding: brandValues,
 	} as unknown as EventConfig;

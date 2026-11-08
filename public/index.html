@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{locale}}" style="--blue: {{brandColor}}">
+<html lang="{{locale}}" style="--blue: {{brandColor}}" data-coming-soon="{{comingSoon}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -35,18 +35,23 @@
 <p class="eyebrow">{{community}}</p>
 <h1>{{eventName}}</h1>
 <p class="invitation">{{tagline}}</p>
+<p class="event-description">{{eventDescription}}</p>
 <div class="event-details">
 <div class="event-detail">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="3"/><path d="M7.5 3v5M16.5 3v5M3.5 11h17M8 15h3M13 15h3"/></svg>
-<p><a href="{{googleCalendarUrl}}" target="_blank" rel="noopener noreferrer" aria-label="{{calendarLabel}}"><strong>{{dateLabel}}</strong><span><time datetime="{{startAt}}">{{timeLabel}}</time></span><span class="calendar-label">Add to Google Calendar ↗</span></a><a class="calendar-file" href="/happy-hour.ics" download="event.ics">Other calendars (.ics)</a></p>
+<p><a href="{{googleCalendarUrl}}" target="_blank" rel="noopener noreferrer" aria-label="{{calendarLabel}}"><strong>{{dateLabel}}</strong><span><time datetime="{{startAt}}">{{timeLabel}}</time></span><span class="calendar-label">Add to Google Calendar ↗</span></a><a class="calendar-file" href="/meetup.ics" download="meetup.ics">Other calendars (.ics)</a></p>
 </div>
-<a class="event-detail venue-card" href="{{venueUrl}}" target="_blank" rel="noopener noreferrer" aria-label="{{venueLabel}}">
+{{venueStart}}
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M19.5 10c0 5.5-7.5 11-7.5 11S4.5 15.5 4.5 10a7.5 7.5 0 1 1 15 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
-<p><strong>{{venueName}} <span class="venue-arrow" aria-hidden="true">↗</span></strong><span>{{venueAddress}}</span><span class="venue-link-label">Visit website</span></p>
-</a>
+<p><strong>{{venueName}} {{venueArrow}}</strong><span>{{venueAddress}}</span><span class="venue-link-label">{{venueWebsite}}</span></p>
+{{venueEnd}}
 </div>
 </header>
 <div class="signup-column">
+<section id="coming-soon" class="signup-card" aria-labelledby="coming-soon-heading">
+<div class="card-heading"><h2 id="coming-soon-heading">Signups coming soon</h2><p>We look forward to seeing you.</p></div>
+<button id="manage-existing" type="button">Manage existing signup</button>
+</section>
 <p id="status" role="status" aria-live="polite">Loading…</p>
 <section id="signed-out" class="signup-card" aria-labelledby="signin-heading" hidden>
 <div class="card-heading"><span class="hello" aria-hidden="true">Hi, neighbor.</span><h2 id="signin-heading">See you there?</h2><p>Let us know you’re coming, get a PFP button, or keep in touch for the next one.</p></div>

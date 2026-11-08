@@ -1,3 +1,12 @@
+#coming-soon {
+	display: none;
+}
+html[data-coming-soon="true"] #coming-soon {
+	display: block;
+}
+html[data-coming-soon="true"] #signed-out:not([data-managing="true"]) {
+	display: none;
+}
 .saved-summary {
 	margin: 0 0 24px;
 	padding: 16px;
@@ -176,6 +185,14 @@ h1 span {
 }
 .card-heading {
 	margin-bottom: 24px;
+}
+html[data-coming-soon="true"] #signed-out .card-heading {
+	display: none;
+}
+.event-description {
+	margin: 0 0 24px;
+	color: var(--muted);
+	font-size: 16px;
 }
 .hello {
 	display: block;

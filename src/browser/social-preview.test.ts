@@ -139,6 +139,12 @@ describe("public social preview", () => {
 		);
 		expect(eventCalendar(event, origin)).toContain(`URL;VALUE=URI:${origin}/`);
 	});
+	it("collapses a TBA venue to one announcement on the social card", () => {
+		const tba = parseEventConfig({ ...event, comingSoon: true, venue: { name: "TBA", address: "TBA", url: "TBA" } });
+		const svg = renderSocialPreview(tba, readFileSync("public/favicon.svg", "utf8"));
+		expect(svg).toContain("Venue to be announced soon");
+		expect(svg).not.toContain("TBA");
+	});
 	it("uses the official generic Bluesky butterfly consistently in logo-only vector assets", () => {
 		const source = readFileSync("public/favicon.svg", "utf8");
 		const logo = new DOMParser().parseFromString(source, "image/svg+xml");

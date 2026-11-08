@@ -177,6 +177,7 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 			if (url.pathname === "/api/me" && method === "GET") {
 				const response = session ? db.get(session.profile.did) : null;
 				const state: ClientState = {
+					comingSoon: config.event.comingSoon ?? false,
 					profile: session?.profile ?? null,
 					csrf: session?.csrf ?? "",
 					response,
@@ -258,6 +259,15 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 						fields.expectedVersion.length > 64
 					)
 						throw new RequestError(400, "Invalid preference fields");
+					if (
+						config.event.comingSoon &&
+						fields.futureMeetups &&
+						!db.preference(session.profile.did)
+					)
+						throw new RequestError(
+							409,
+							"Signups are coming soon; new contact opt-ins are not open yet.",
+						);
 					if (!db.setPreference(session.profile, fields.futureMeetups, now, fields.expectedVersion))
 						throw conflict();
 					return send(200, { ok: true });
@@ -290,6 +300,18 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 						throw new RequestError(400, "Invalid response fields");
 					if (db.version(session.profile.did) !== expectedVersion) throw conflict();
 					const old = db.get(session.profile.did);
+					if (
+						config.event.comingSoon &&
+						(!old ||
+							(input.attendance !== old.attendance &&
+								input.attendance !== "cant" &&
+								input.attendance !== null) ||
+							(input.futureMeetups && !db.preference(session.profile.did)))
+					)
+						throw new RequestError(
+							409,
+							"Signups are coming soon; you can still withdraw or delete existing choices.",
+						);
 					if (input.button && input.attendance !== "cant") {
 						const source = old?.artwork && !input.replaceArtwork ? old.artwork : session.profile;
 						if (approvedSource !== artworkSource(source)) throw conflict();
@@ -347,7 +369,8 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 									old.artwork.rendererVersion !== BUTTON_RENDERER_VERSION)));
 					if (
 						changedButton &&
-						((config.buttonCutoff !== null && now >= config.buttonCutoff) ||
+						(config.event.comingSoon ||
+							(config.buttonCutoff !== null && now >= config.buttonCutoff) ||
 							(config.artworkDeleteAt !== null && now >= config.artworkDeleteAt))
 					)
 						throw new RequestError(
@@ -364,7 +387,7 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 					return send(200, saved);
 				}
 			}
-			if (method === "GET" && url.pathname === "/happy-hour.ics")
+			if (method === "GET" && url.pathname === "/meetup.ics")
 				return send(
 					200,
 					eventCalendar(config.event, config.origin),

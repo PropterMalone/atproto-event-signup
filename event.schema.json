@@ -14,11 +14,29 @@
 		"endAt",
 		"timeZone",
 		"locale",
-		"calendarUid",
 		"venue",
 		"branding"
 	],
+	"allOf": [
+		{
+			"if": { "properties": { "comingSoon": { "const": true } }, "required": ["comingSoon"] },
+			"then": { "properties": { "calendarUid": { "type": "string" } } },
+			"else": {
+				"required": ["calendarUid"],
+				"properties": {
+					"calendarUid": { "$ref": "#/definitions/text" },
+					"venue": { "properties": { "url": { "$ref": "#/definitions/venueUrl" } } }
+				}
+			}
+		}
+	],
 	"properties": {
+		"comingSoon": {
+			"type": "boolean",
+			"default": false,
+			"description": "Show event details with a coming-soon notice instead of inviting signups. New RSVPs, artwork approvals and future-contact opt-ins are blocked server-side; existing attendees may sign in to withdraw, unsubscribe or delete. Omitted means registration is open, subject to existing cutoffs.",
+			"examples": [true, false]
+		},
 		"$schema": {
 			"description": "Editor schema reference. Use ./event.schema.json when the schema is beside this config. This is metadata, not a runtime network request.",
 			"examples": ["./event.schema.json"],
@@ -112,13 +130,9 @@
 			]
 		},
 		"calendarUid": {
-			"description": "Stable, unique calendar event identifier. Keep it when correcting the same event; create a new one for a different event. It is not a URL.",
+			"description": "Stable, unique calendar event identifier. Optional or empty only when comingSoon is true; draft downloads then use a deterministic temporary UID. Set a permanent UID before opening registration. Keep it when correcting the same event; create a new one for a different event. It is not a URL.",
 			"examples": ["19551105-hill-valley-meetup@example.com"],
-			"allOf": [
-				{
-					"$ref": "#/definitions/text"
-				}
-			]
+			"anyOf": [{ "const": "" }, { "$ref": "#/definitions/text" }]
 		},
 		"venue": {
 			"type": "object",
@@ -145,15 +159,9 @@
 					]
 				},
 				"url": {
-					"allOf": [
-						{
-							"$ref": "#/definitions/text"
-						}
-					],
-					"format": "uri",
-					"pattern": "^https://[^/?#@]+(?:[/?#].*)?$",
-					"description": "Public HTTPS venue website, without credentials.",
-					"examples": ["https://venue.example.com/"]
+					"anyOf": [{ "const": "TBA" }, { "$ref": "#/definitions/venueUrl" }],
+					"description": "Public HTTPS venue website, without credentials. May be TBA only while comingSoon is true; the page then shows venue details without a website link.",
+					"examples": ["https://venue.example.com/", "TBA"]
 				}
 			}
 		},
@@ -311,6 +319,11 @@
 		}
 	},
 	"definitions": {
+		"venueUrl": {
+			"allOf": [{ "$ref": "#/definitions/text" }],
+			"format": "uri",
+			"pattern": "^https://[^/?#@]+(?:[/?#].*)?$"
+		},
 		"text": {
 			"type": "string",
 			"minLength": 1,

@@ -14,6 +14,7 @@ describe("launch-only checks", () => {
 	const example = parseEventConfig(JSON.parse(readFileSync("event.json", "utf8")));
 	const launchEvent = {
 		...example,
+		comingSoon: false,
 		name: "Time travelers meetup",
 		community: "An independent meetup",
 		tagline: "Meet local friends.",
@@ -117,6 +118,26 @@ describe("public event configuration", () => {
 		const { $schema: _schema, ...plain } = event;
 		expect(validate(plain)).toBe(true);
 		expect(parseEventConfig(plain)).toEqual(plain);
+	});
+	it("accepts an optional coming-soon flag and rejects non-boolean values", () => {
+		const ready = {
+			...event,
+			calendarUid: "19551105-meetup@example.com",
+			venue: { ...event.venue, url: "https://venue.example.com/" },
+		};
+		for (const comingSoon of [true, false]) {
+			const input = { ...ready, comingSoon };
+			expect(validate(input)).toBe(true);
+			expect(parseEventConfig(input).comingSoon).toBe(comingSoon);
+		}
+		const { comingSoon: _comingSoon, ...open } = ready;
+		expect(validate(open)).toBe(true);
+		expect(parseEventConfig(open).comingSoon).toBeUndefined();
+		for (const comingSoon of ["true", 1, null]) {
+			const input = { ...event, comingSoon };
+			expect(validate(input)).toBe(false);
+			expect(() => parseEventConfig(input)).toThrow("comingSoon");
+		}
 	});
 	it("keeps actual timezone validity and cross-field date ordering in runtime validation", () => {
 		for (const input of [

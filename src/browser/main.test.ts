@@ -23,6 +23,62 @@ async function page() {
 const tick = async () => {
 	await vi.waitFor(() => expect(document.getElementById("status")?.textContent).toBe(""));
 };
+it("shows coming-soon information without inviting new signups and permits management sign-in", async () => {
+	await page();
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						comingSoon: true,
+						profile: null,
+						csrf: "",
+						response: null,
+						admin: false,
+						policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+					}),
+				),
+		),
+	);
+	await import("./main.js");
+	await tick();
+	expect(document.documentElement.dataset.comingSoon).toBe("true");
+	expect(document.getElementById("signed-out")?.hidden).toBe(true);
+	expect(document.getElementById("signed-in")?.hidden).toBe(true);
+	expect(document.getElementById("coming-soon")?.textContent).toContain("Signups coming soon");
+	expect(document.body.textContent).toContain("1640 Riverside Drive");
+	document.getElementById("manage-existing")?.click();
+	expect(document.getElementById("signed-out")?.hidden).toBe(false);
+	expect(document.getElementById("signed-out")?.dataset.managing).toBe("true");
+});
+it("hides empty signup controls for a management-only sign-in", async () => {
+	await page();
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						comingSoon: true,
+						profile: { did: "did:plc:alice", handle: "alice.test", avatar: null },
+						csrf: "token",
+						response: null,
+						responseVersion: "",
+						futureMeetups: false,
+						preview: { profile: "", saved: null },
+						admin: false,
+						policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+					}),
+				),
+		),
+	);
+	await import("./main.js");
+	await tick();
+	expect(document.getElementById("response")?.hidden).toBe(true);
+	expect(document.getElementById("signed-in")?.hidden).toBe(false);
+	expect(document.getElementById("logout")?.hidden).toBe(false);
+});
 it("renders signed-out event copy without collecting a response or showing operator data", async () => {
 	await page();
 	vi.stubGlobal(
