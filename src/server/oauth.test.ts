@@ -98,9 +98,15 @@ it("constructs the real official SDK in local and confidential HTTPS mode, retai
 	const local = await createOAuth("http://127.0.0.1:3000", dir, db);
 	expect(local.metadata).toMatchObject({ scope: "atproto", token_endpoint_auth_method: "none" });
 	const before = await readFile(join(dir, "oauth-key.json"), "utf8");
-	const production = await createOAuth("https://dcbsky.com", dir, db);
+	const production = await createOAuth(
+		"https://hill-valley.example.com",
+		dir,
+		db,
+		"Hill Valley Bluesky meetup",
+	);
 	expect(production.metadata).toMatchObject({
-		client_id: "https://dcbsky.com/client-metadata.json",
+		client_id: "https://hill-valley.example.com/client-metadata.json",
+		client_name: "Hill Valley Bluesky meetup",
 		scope: "atproto",
 		token_endpoint_auth_method: "private_key_jwt",
 	});
@@ -108,6 +114,6 @@ it("constructs the real official SDK in local and confidential HTTPS mode, retai
 	expect(production.jwks).toHaveProperty("keys.0.x");
 	expect(await readFile(join(dir, "oauth-key.json"), "utf8")).toBe(before);
 	await writeFile(join(dir, "oauth-key.json"), "corrupt");
-	await expect(createOAuth("https://dcbsky.com", dir, db)).rejects.toThrow();
+	await expect(createOAuth("https://hill-valley.example.com", dir, db)).rejects.toThrow();
 	expect(await readFile(join(dir, "oauth-key.json"), "utf8")).toBe("corrupt");
 });

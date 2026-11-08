@@ -13,6 +13,7 @@
 		"build": "tsc -p tsconfig.build.json && esbuild src/browser/main.ts --bundle --format=esm --target=es2022 --outfile=dist/public/app.js && node scripts/copy-public.mjs",
 		"start": "node --env-file-if-exists=.env dist/server/main.js",
 		"smoke": "node scripts/smoke.mjs",
+		"preflight": "node --env-file-if-exists=.env scripts/preflight.mjs",
 		"backup": "node --env-file-if-exists=.env scripts/backup.mjs",
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage --passWithNoTests",
@@ -23,12 +24,16 @@
 	},
 	"dependencies": {
 		"@atproto-labs/fetch-node": "0.4.3",
-		"@atproto/oauth-client-node": "0.5.12"
+		"@atproto/oauth-client-node": "0.5.12",
+		"ical-generator": "11.1.3"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.15",
+		"@resvg/resvg-js": "2.6.2",
 		"@types/node": "22.20.5",
 		"@vitest/coverage-v8": "5.0.5",
+		"ajv": "8.20.0",
+		"ajv-formats": "3.0.1",
 		"esbuild": "0.28.2",
 		"happy-dom": "21.0.4",
 		"knip": "6.43.0",

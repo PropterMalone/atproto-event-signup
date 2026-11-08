@@ -1,5 +1,253 @@
 import { validateOrigin } from "./policy.js";
 
+export interface EventConfig {
+	$schema?: string;
+	comingSoon?: boolean;
+	copy?: Record<string, EventCopy>;
+	name: string;
+	community: string;
+	tagline: string;
+	description: string;
+	footerText?: string;
+	footerLink?: string;
+	origin: string;
+	startAt: string;
+	endAt: string;
+	timeZone: string;
+	locale: string;
+	calendarUid?: string;
+	venue: { name: string; address: string; url: string };
+	branding: {
+		name: string;
+		shortName: string;
+		color: string;
+		mark: string;
+		markAlt: string;
+		favicon: string;
+		favicon32: string;
+		appleTouchIcon: string;
+		icon192: string;
+		icon512: string;
+		socialImage: string;
+		socialImageAlt: string;
+		socialImageWidth: number;
+		socialImageHeight: number;
+	};
+}
+
+interface EventCopy {
+	organizersOnly?: string;
+	signupPrivacy?: string;
+	textColor?: string;
+}
+
+export function parseEventConfig(input: unknown): EventConfig {
+	function object(
+		value: unknown,
+		label: string,
+		fields: readonly string[],
+	): Record<string, unknown> {
+		if (!value || typeof value !== "object" || Array.isArray(value))
+			throw Error(`Event config ${label} must be an object`);
+		if (Object.keys(value).some((field) => !fields.includes(field)))
+			throw Error(`Event config ${label} contains unknown fields`);
+		return value as Record<string, unknown>;
+	}
+	function text(value: unknown, label: string): string {
+		if (
+			typeof value !== "string" ||
+			!value.trim() ||
+			value.length > 2000 ||
+			Array.from(value).some(
+				(character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+			)
+		)
+			throw Error(`Event config ${label} must be nonempty text without control characters`);
+		return value;
+	}
+	const root = object(input, "root", [
+		"$schema",
+		"comingSoon",
+		"copy",
+		"name",
+		"community",
+		"tagline",
+		"description",
+		"footerText",
+		"footerLink",
+		"origin",
+		"startAt",
+		"endAt",
+		"timeZone",
+		"locale",
+		"calendarUid",
+		"venue",
+		"branding",
+	]);
+	const venue = object(root.venue, "venue", ["name", "address", "url"]);
+	if (root.comingSoon !== undefined && typeof root.comingSoon !== "boolean")
+		throw Error("Event config comingSoon must be a boolean");
+	const branding = object(root.branding, "branding", [
+		"name",
+		"shortName",
+		"color",
+		"mark",
+		"markAlt",
+		"favicon",
+		"favicon32",
+		"appleTouchIcon",
+		"icon192",
+		"icon512",
+		"socialImage",
+		"socialImageAlt",
+		"socialImageWidth",
+		"socialImageHeight",
+	]);
+	const values: Record<string, string> = {};
+	for (const field of [
+		"name",
+		"community",
+		"tagline",
+		"description",
+		"origin",
+		"startAt",
+		"endAt",
+		"timeZone",
+		"locale",
+	])
+		values[field] = text(root[field], field);
+	const footerText =
+		root.footerText === undefined ? undefined : text(root.footerText, "footerText");
+	const footerLink =
+		root.footerLink === undefined ? undefined : text(root.footerLink, "footerLink");
+	let copy: EventConfig["copy"];
+	if (root.copy !== undefined) {
+		if (!root.copy || typeof root.copy !== "object" || Array.isArray(root.copy))
+			throw Error("Event config copy must be an object keyed by locale");
+		copy = {};
+		for (const [locale, value] of Object.entries(root.copy)) {
+			let canonicalLocale: string;
+			try {
+				canonicalLocale = Intl.getCanonicalLocales(locale)[0] ?? "";
+			} catch {
+				canonicalLocale = "";
+			}
+			if (!canonicalLocale)
+				throw Error(`Event config copy locale ${locale} must be a valid BCP 47 locale`);
+			if (copy[canonicalLocale])
+				throw Error(`Event config copy contains duplicate locale ${canonicalLocale}`);
+			const fields = object(value, `copy.${locale}`, [
+				"organizersOnly",
+				"signupPrivacy",
+				"textColor",
+			]);
+			const localized: EventCopy = {};
+			for (const field of ["organizersOnly", "signupPrivacy", "textColor"] as const)
+				if (fields[field] !== undefined)
+					localized[field] = text(fields[field], `copy.${locale}.${field}`);
+			copy[canonicalLocale] = localized;
+		}
+	}
+	if (footerLink !== undefined) {
+		try {
+			const url = new URL(footerLink);
+			if (url.protocol !== "https:" || !url.hostname || url.username || url.password) throw Error();
+		} catch {
+			throw Error("Event config footerLink must be a public HTTPS URL");
+		}
+	}
+	if (root.calendarUid !== undefined || root.comingSoon !== true)
+		values.calendarUid =
+			root.comingSoon === true && root.calendarUid === ""
+				? ""
+				: text(root.calendarUid, "calendarUid");
+	validateOrigin(values.origin ?? "");
+	for (const field of ["startAt", "endAt"]) {
+		const value = values[field] ?? "";
+		if (
+			!/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(
+				value,
+			) ||
+			!Number.isFinite(Date.parse(value)) ||
+			new Date(`${value.slice(0, 10)}T00:00:00Z`).toISOString().slice(0, 10) !== value.slice(0, 10)
+		)
+			throw Error(`Event config ${field} requires an ISO timestamp with explicit timezone`);
+	}
+	if (Date.parse(values.endAt ?? "") <= Date.parse(values.startAt ?? ""))
+		throw Error("Event config endAt must be after startAt");
+	try {
+		new Intl.DateTimeFormat(values.locale, { timeZone: values.timeZone }).format(
+			new Date(values.startAt ?? ""),
+		);
+	} catch {
+		throw Error("Event config requires a valid locale and IANA timeZone");
+	}
+	const venueValues = {
+		name: text(venue.name, "venue.name"),
+		address: text(venue.address, "venue.address"),
+		url: text(venue.url, "venue.url"),
+	};
+	if (!(root.comingSoon === true && venueValues.url === "TBA")) {
+		const venueUrl = new URL(venueValues.url);
+		if (venueUrl.protocol !== "https:" || venueUrl.username || venueUrl.password)
+			throw Error("Event config venue.url must be a public HTTPS URL, or TBA while coming soon");
+	}
+	const brandValues: Record<string, string | number> = {};
+	for (const field of [
+		"name",
+		"shortName",
+		"color",
+		"mark",
+		"markAlt",
+		"favicon",
+		"favicon32",
+		"appleTouchIcon",
+		"icon192",
+		"icon512",
+		"socialImage",
+		"socialImageAlt",
+	])
+		brandValues[field] = text(branding[field], `branding.${field}`);
+	if (!/^#[a-f0-9]{6}$/i.test(String(brandValues.color)))
+		throw Error("Event config branding.color must be a six-digit hex color");
+	for (const field of [
+		"mark",
+		"favicon",
+		"favicon32",
+		"appleTouchIcon",
+		"icon192",
+		"icon512",
+		"socialImage",
+	]) {
+		const path = String(brandValues[field]);
+		if (!/^\/[a-zA-Z0-9_-]+\.(?:svg|png)$/.test(path))
+			throw Error(`Event config branding.${field} must name a root-level public PNG or SVG asset`);
+	}
+	if (!String(brandValues.favicon).endsWith(".svg"))
+		throw Error("Event config branding.favicon must be SVG");
+	for (const field of ["favicon32", "appleTouchIcon", "icon192", "icon512"])
+		if (!String(brandValues[field]).endsWith(".png"))
+			throw Error(`Event config branding.${field} must be PNG`);
+	if (!String(brandValues.socialImage).endsWith(".png"))
+		throw Error("Event config branding.socialImage must be PNG");
+	for (const field of ["socialImageWidth", "socialImageHeight"]) {
+		const value = branding[field];
+		if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 4096)
+			throw Error(`Event config branding.${field} must be an integer between 1 and 4096`);
+		brandValues[field] = value;
+	}
+	return {
+		...values,
+		...(copy === undefined ? {} : { copy }),
+		...(footerText === undefined ? {} : { footerText }),
+		...(footerLink === undefined ? {} : { footerLink }),
+		...(root.$schema === undefined ? {} : { $schema: text(root.$schema, "$schema") }),
+		...(root.comingSoon === undefined ? {} : { comingSoon: root.comingSoon }),
+		venue: venueValues,
+		branding: brandValues,
+	} as unknown as EventConfig;
+}
+
 export function readAdminDids(env: NodeJS.ProcessEnv): Set<string> {
 	const value = env.ADMIN_DIDS?.trim();
 	if (!value) return new Set();

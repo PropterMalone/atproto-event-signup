@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { readFile } from "node:fs/promises";
+import { Window } from "happy-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import { loadEventConfig, renderEventPage } from "../server/event.js";
 import type { ClientState } from "../shared/types.js";
 
 afterEach(() => {
@@ -8,15 +10,80 @@ afterEach(() => {
 	document.body.replaceChildren();
 	vi.resetModules();
 });
-async function page() {
-	const html = await readFile("public/index.html", "utf8");
-	document.body.innerHTML = html.split("<body>")[1]?.split("</body>")[0] ?? "";
+async function page(config?: Awaited<ReturnType<typeof loadEventConfig>>) {
+	const event = config ?? (await loadEventConfig());
+	const html = renderEventPage(await readFile("public/index.html", "utf8"), event);
+	const parser = new Window({
+		settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true },
+	}).DOMParser;
+	const rendered = new parser().parseFromString(html, "text/html");
+	document.documentElement.lang = rendered.documentElement.lang;
+	document.documentElement.dataset.timeZone = rendered.documentElement.dataset.timeZone ?? "";
+	document.body.innerHTML = rendered.body.innerHTML;
 }
 const tick = async () => {
 	await vi.waitFor(() => expect(document.getElementById("status")?.textContent).toBe(""));
 };
-it("renders signed-out event copy without collecting a response or showing operator data", async () => {
+it("shows coming-soon information without inviting new signups and permits management sign-in", async () => {
+	const event = await loadEventConfig();
+	await page({ ...event, comingSoon: true });
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						comingSoon: true,
+						profile: null,
+						csrf: "",
+						response: null,
+						admin: false,
+						policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+					}),
+				),
+		),
+	);
+	await import("./main.js");
+	await tick();
+	expect(document.documentElement.dataset.comingSoon).toBe("true");
+	expect(document.getElementById("signed-out")?.hidden).toBe(true);
+	expect(document.getElementById("signed-in")?.hidden).toBe(true);
+	expect(document.getElementById("coming-soon")?.textContent).toContain("Signups coming soon");
+	expect(document.body.textContent).toContain(event.venue.address);
+	document.getElementById("manage-existing")?.click();
+	expect(document.getElementById("signed-out")?.hidden).toBe(false);
+	expect(document.getElementById("signed-out")?.dataset.managing).toBe("true");
+});
+it("hides empty signup controls for a management-only sign-in", async () => {
 	await page();
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						comingSoon: true,
+						profile: { did: "did:plc:alice", handle: "alice.test", avatar: null },
+						csrf: "token",
+						response: null,
+						responseVersion: "",
+						futureMeetups: false,
+						preview: { profile: "", saved: null },
+						admin: false,
+						policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+					}),
+				),
+		),
+	);
+	await import("./main.js");
+	await tick();
+	expect(document.getElementById("response")?.hidden).toBe(true);
+	expect(document.getElementById("signed-in")?.hidden).toBe(false);
+	expect(document.getElementById("logout")?.hidden).toBe(false);
+});
+it("renders signed-out event copy without collecting a response or showing operator data", async () => {
+	const event = await loadEventConfig();
+	await page(event);
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(
@@ -37,8 +104,9 @@ it("renders signed-out event copy without collecting a response or showing opera
 	expect(document.getElementById("signed-out")?.hidden).toBe(false);
 	expect(document.getElementById("signed-in")?.hidden).toBe(true);
 	expect(document.getElementById("operator")?.hidden).toBe(true);
-	expect(document.body.textContent).toContain("November 10");
-	expect(document.body.textContent).toContain("2026");
+	expect(document.querySelector("h1")?.textContent).toBe(event.name);
+	expect(document.querySelector("time")?.getAttribute("datetime")).toBe(event.startAt);
+	expect(document.body.textContent).toContain(event.venue.address);
 	expect(document.querySelector('[name="partySize"]')).toBeNull();
 	expect(document.querySelector('input[type="email"]')).toBeNull();
 	expect((document.getElementById("future-meetups") as HTMLInputElement).checked).toBe(false);
@@ -147,7 +215,8 @@ it("previews saved consent snapshot, permits PFP-only, and decline unchecks butt
 	expect(document.getElementById("replacement-option")?.hidden).toBe(true);
 });
 it("renders and filters the private operator future-contact list without treating it as attendance", async () => {
-	await page();
+	const event = await loadEventConfig();
+	await page({ ...event, locale: "en-GB", timeZone: "Europe/London" });
 	const state: ClientState = {
 		profile: { did: "did:plc:operator", handle: "operator.test", avatar: null },
 		csrf: "secret",
@@ -183,8 +252,16 @@ it("renders and filters the private operator future-contact list without treatin
 	);
 	await import("./main.js");
 	await tick();
+	expect(document.documentElement.lang).toBe("en-GB");
+	expect(document.documentElement.dataset.timeZone).toBe("Europe/London");
 	expect(document.getElementById("counts")?.textContent).toContain("Future meetups: 2");
 	expect(document.getElementById("contact-count")?.textContent).toBe("2 of 2 contacts");
+	expect(document.querySelector("#future-contacts tr")?.textContent).toContain(
+		new Date(100).toLocaleString("en-GB", {
+			timeZone: "Europe/London",
+			timeZoneName: "short",
+		}),
+	);
 	const filter = document.getElementById("contact-filter") as HTMLInputElement;
 	filter.value = "DID:PLC:BOB";
 	filter.dispatchEvent(new Event("input"));

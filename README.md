@@ -1,6 +1,6 @@
 # AT Protocol event signup
 
-A small event page with Bluesky sign-in and private SQLite storage. Built for a DC community happy hour; the public page in this repository is the worked example. You can run your own copy or ask about free hosting below.
+A small event page with Bluesky sign-in and private SQLite storage. Originally built for a DC community happy hour; the default config now uses a fictional Back to the Future meetup in Hill Valley. You can run your own copy or ask about free hosting below.
 
 **AT Protocol verifies identity. RSVPs do not become public records on attendees' PDSes.** The organizer stores individual responses, optional profile-picture button artwork and an independent future-contact preference in a private local database. No email collection, public attendee list, automated DMs or automatic posting.
 
@@ -52,21 +52,40 @@ Open http://127.0.0.1:3000 . Local OAuth follows the AT Protocol loopback conven
 
 ## Adapt the example
 
-This is a working single-event app, not a generic event platform. The sample retains public **DC Bluesky / November10,2026 / Sudhouse** branding so you can see the actual page that inspired it. Before inviting people to your own deployment, replace all sample event facts and links:
+This is a working single-event app, not a generic event platform. The default is a fictional **Hill Valley Bluesky meetup / November 5, 1955 / Doc Brown's house, 1640 Riverside Drive** from Back to the Future. It runs from 6 to 9 p.m. Pacific time. The alternate timezone tests also use October 21, 2015 to retain daylight-saving coverage. Before inviting people to your own deployment, replace all sample event facts and links:
 
-1. `public/index.html`: visible text, date/time, venue, address, Google Calendar URL, social metadata, privacy and retention copy.
-2. `public/happy-hour.ics`: event UID, title, timezone-aware date/time, location and URL. Create a new UID for a different event.
-3. `public/social-preview.svg` and `.png`: social card. SVG is editable source; regenerate the PNG after changing it. An installed SVG renderer such as `rsvg-convert` works; it is not needed to run the app.
-4. `public/favicon.svg`, icon PNGs, `site.webmanifest` and CSS: branding. Optional `bluesky-avatar`/`bluesky-banner` sources are account artwork from the example, not runtime features.
-5. `.env`: your origin, private storage directories, **ADMIN_DIDS**, artwork deadline and optional cutoffs/print dimensions. The example deadline is illustrative, not a retention policy chosen for your event. Tests intentionally check sample copy and artwork; update their expectations when customizing.
+1. `event.json`: event name, community line, invitation, description, public origin, start/end timestamps, IANA timezone, locale, venue name/address/website, calendar UID and branding. The server renders visible copy, accessible labels, social metadata, Google Calendar links, the `.ics` download, web manifest and OAuth display name from this one file. Create a new calendar UID for a different event; keep it stable when correcting the same event.
+2. Branding assets: put your mark, favicon and icon PNGs in `public/`, then set their paths, descriptions, dimensions and primary color in `event.json`. Paths must name root-level PNG/SVG files. When `branding.socialImage` is `/social-preview.png`, the build regenerates the SVG source and PNG event card from the config, including the logo, event name, invitation, date/time, venue, address and public hostname. Set a different PNG path to use your own finished social card without regeneration. The build copies only configured assets. Optional `bluesky-avatar`/`bluesky-banner` files are generic logo assets, not runtime features or attendee artwork.
+3. `.env`: private storage directories, **ADMIN_DIDS**, artwork deadline and optional cutoffs/print dimensions. These operational/privacy settings remain separate from public event copy. The example deadline is illustrative, not a retention policy chosen for your event.
 
-The app's OAuth metadata, public-profile fetching and labels also contain the sample service name; search the source for `DC Bluesky`, `dcbsky.com`, `Sudhouse` and `2026` when adapting it. Domain strings in tests are fixtures, not deployment configuration. Do not send attendees to the sample event accidentally.
+`public/index.html` is now a template, not a file to customize for each event. Calendar and manifest responses are generated, not separately maintained static files. Dates are displayed using `timeZone` and `locale`; timestamps must include `Z` or an explicit offset. Winter uses GMT, while summer uses BST; enter the correct offset for the intended date. The page, Google Calendar and `.ics` describe the same instants.
+
+### Coming soon
+
+Set `"comingSoon": true` in `event.json` to show the event name, description, dates, venue, calendars and social preview with a "Signups coming soon" notice instead of inviting signups. `calendarUid` may be omitted or empty in this mode; calendar downloads use a deterministic draft UID derived from the configured event name, start instant and origin. Set a permanent, nonempty UID before switching to `false` (or omitting `comingSoon`) to open registration, then rebuild and restart. Preflight reports enabled coming-soon mode as a warning.
+
+While coming soon, `venue.url` may be `"TBA"`. Venue name and address remain visible, but no website link or arrow is rendered; the page says "Website to be announced". Preflight reports this as a warning. Set an HTTPS venue URL before opening registration.
+
+This is not just a hidden form: the server rejects new RSVPs, new artwork approvals and new future-contact opt-ins. Existing attendees may use "Manage existing signup" to sign in, withdraw attendance/artwork, unsubscribe or delete their data. Operator authorization, OAuth identity checks, private lists, cutoff enforcement and artwork expiry remain intact. Sign-in alone still does not submit an RSVP. This app setting does not change an external reverse proxy's maintenance configuration.
+
+### Config editor support
+
+`event.json` references the local `event.schema.json` through `"$schema": "./event.schema.json"`. VS Code uses it for field suggestions, hover descriptions, example values and validation of required fields, types, dates, URLs, asset paths and dimensions. Unknown fields are rejected at the root and within `venue`/`branding`, both by the schema and by the app, so typos do not silently disappear. Put private environment settings in `.env`, not this config.
+
+For a separate config selected by `EVENT_CONFIG`, copy the schema beside it or adjust `$schema` to the schema's relative path. The reference is optional metadata; the app does not fetch it or require the schema file at runtime. The schema cannot establish actual timezone/locale validity, compare start/end dates, inspect artwork or approve launch readiness. Runtime config validation and `npm run preflight` still perform those checks. Historical example dates remain valid editor/development values.
+
+The config is validated and loaded once at startup. After changing event details, run `npm run build` to refresh the social image and restart the app to refresh the page. The SVG rasterizer uses installed system fonts; a sans-serif font such as DejaVu Sans should be available on the build host. `EVENT_CONFIG` selects a different JSON file (absolute paths recommended on a server); it defaults to `event.json` in the working directory. The same setting is used by the build and smoke test. Deploy that config alongside `dist/`, dependency manifests and the backup script, or point `EVENT_CONFIG` to your chosen file. Keep credentials and attendee data out of this public-copy config.
+
+The checked-in event details are fictional and the `example.com` URLs are placeholders, not a live event. The social card shows the placeholder event information beside the generic official blue Bluesky butterfly. Logo-only SVGs are the unmodified [official butterfly download](https://bsky.social/about/brand-assets/butterfly/bluesky_media_kit_logo_transparent_1.svg); icon/avatar/banner PNGs are resized from the [official blue-on-white square logo](https://bsky.social/about/brand-assets/logos/bluesky_media_kit_logo_2.png), with white padding for banners. The social-card renderer embeds the configured logo without recoloring or stretching it. No original account artwork is included. Sources: [Bluesky brand assets](https://bsky.social/about/support/icons).
+
+Bluesky's logos remain subject to its [Brand Guidelines](https://bsky.social/about/support/branding) and [Trademark Policy](https://bsky.social/about/support/trademarks), not this repository's MIT license. The current policy requires prior written permission for community meetup branding; contact `trademarks@blueskyweb.xyz` before public use. This independent project is not affiliated with, endorsed by, or officially connected to Bluesky Social PBC. Domain strings in tests are fixtures, not deployment configuration. Generic consent, deletion and operator authorization behavior is not overridden by event text.
 
 ## Configuration and HTTPS
 
 `.env.example` lists supported environment settings. Keep actual `.env` files out of source control.
 
-- `APP_ORIGIN`: exact public origin without trailing slash/path. Local default is `http://127.0.0.1:3000`; production requires HTTPS. The server listens only on loopback.
+- `EVENT_CONFIG`: path to the public event JSON config, default `event.json` relative to the working directory.
+- `APP_ORIGIN`: optional override of the config's exact origin, without trailing slash/path; useful for local development (`http://127.0.0.1:3000`). The override also updates public metadata and calendar URLs. Production requires HTTPS. The server listens only on loopback.
 - `ADMIN_DIDS`: comma-separated verified account DIDs allowed into operator APIs. Blank means nobody has operator access. Configure your own DID; no original organizer identity is privileged in this export. Handles can change; authorization uses the verified DID, never a browser-provided identity.
 - `DATA_DIR`: private persistent directory; defaults to ignored `.data/`. One process only. Keep `app.sqlite` and `oauth-key.json` stable across restarts.
 - `ARTWORK_DELETE_AT`: required for HTTPS and backups; ISO timestamp with explicit timezone. Choose it deliberately and make the public copy match. `RESPONSE_CUTOFF` and `BUTTON_CUTOFF` are optional. Withdrawal, deletion and contact-preference management remain available after cutoffs.
@@ -103,6 +122,27 @@ The command caps snapshots at seven and expires them after seven days. At/after 
 The app scrubs artwork while running; stopping it delays cleanup until restart/request/backup. Downloads, browser folders, print queues, physical prints and host snapshots are outside the app's control. You must apply the same artwork deadline to those copies. Deletion is not a claim of forensic secure erasure.
 
 Restore while the app is stopped into a new private directory, with matching policy/origin and both database and key. Never overlay a running database or mix old WAL/SHM files. After the artwork deadline, restore only sanitized post-deadline backups. Verify operator authorization, private records and a real OAuth login before reopening collection.
+
+## Pre-launch check
+
+After building, check the environment you intend to deploy:
+
+```sh
+npm run build
+npm run preflight
+```
+
+The command loads `.env` if present and the config selected by `EVENT_CONFIG` (default `event.json`). It checks the effective `APP_ORIGIN`, placeholder/loopback URLs, fictional sample copy, ended event dates, organizer DID syntax/access configuration, missing or expired artwork retention, and cutoff/deletion timing. It also checks configured artwork in `PUBLIC_DIR` (default `dist/public`) for readability, basic PNG/SVG format markers and required PNG dimensions. It does not alter files, open the signup database, fetch private artwork or log environment values.
+
+Errors are launch blockers and exit with status 1; warnings require organizer review but exit with status 0 if there are no blockers. The historical Hill Valley example and local HTTP origin deliberately fail this launch-only check, while remaining valid for development and tests. `ARTWORK_DELETE_AT` must be after the event ends for this launch workflow. The command reminds you that attendance/contact retention and downloaded artwork require separate decisions.
+
+To use a separate production environment file without changing local development settings:
+
+```sh
+node --env-file=/path/to/production.env scripts/preflight.mjs
+```
+
+Run it from the application directory containing the built `dist/` folder. Set `EVENT_CONFIG` and `PUBLIC_DIR` in that environment file if they are elsewhere. A clean report does not verify DNS/HTTPS reachability, actual organizer account ownership, a real OAuth login, complete image decoding, backup restoration, dependency safety or trademark permission. Perform those launch checks separately. This command is advisory and does not replace runtime validation or automatically open registration.
 
 ## Development checks
 

@@ -4,11 +4,16 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
 import { readAdminDids, readPolicyConfig } from "./config.js";
+import { loadEventConfig } from "./event.js";
 import { createOAuth } from "./oauth.js";
 import { Store } from "./store.js";
 
 process.umask(0o077);
-const { origin, responseCutoff, buttonCutoff, artworkDeleteAt } = readPolicyConfig(process.env);
+const event = await loadEventConfig();
+const { origin, responseCutoff, buttonCutoff, artworkDeleteAt } = readPolicyConfig({
+	...process.env,
+	APP_ORIGIN: process.env.APP_ORIGIN ?? event.origin,
+});
 const adminDids = readAdminDids(process.env);
 if (process.env.PRINT_DIAMETER_MM)
 	throw Error(
@@ -30,9 +35,10 @@ mkdirSync(directory, { recursive: true, mode: 0o700 });
 chmodSync(directory, 0o700);
 const db = new Store(resolve(directory, "app.sqlite"));
 chmodSync(db.path, 0o600);
-const oauth = await createOAuth(origin, directory, db);
+const oauth = await createOAuth(origin, directory, db, event.name);
 const config = {
 	origin,
+	event,
 	adminDids,
 	responseCutoff,
 	buttonCutoff,
@@ -50,7 +56,7 @@ server.maxHeadersCount = 50;
 const sweep = setInterval(() => db.purge(Date.now(), artworkDeleteAt), 60000);
 sweep.unref();
 server.listen(port, "127.0.0.1", () =>
-	console.log(`DC Bluesky listening on 127.0.0.1:${port}; configured origin ${origin}`),
+	console.log(`${event.name} listening on 127.0.0.1:${port}; configured origin ${origin}`),
 );
 for (const signal of ["SIGTERM", "SIGINT"] as const)
 	process.on(signal, () => {

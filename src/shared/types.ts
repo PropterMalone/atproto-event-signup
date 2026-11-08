@@ -44,6 +44,7 @@ export interface Session {
 	expires: number;
 }
 export interface ClientState {
+	comingSoon?: boolean;
 	profile: Profile | null;
 	csrf: string;
 	response: SavedResponse | null;

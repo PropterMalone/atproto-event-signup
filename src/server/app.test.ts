@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buttonApproval, defaultButtonLabel } from "../shared/button.js";
 import { type AppConfig, createApp } from "./app.js";
 import { readAdminDids } from "./config.js";
+import { loadEventConfig } from "./event.js";
 import type { OAuthBoundary } from "./oauth.js";
 import { Store } from "./store.js";
 
@@ -39,6 +40,7 @@ beforeEach(async () => {
 	db = new Store(join(directory, "test.sqlite"));
 	config = {
 		origin: "",
+		event: { ...(await loadEventConfig()), comingSoon: false },
 		adminDids: new Set([admin]),
 		responseCutoff: null,
 		buttonCutoff: null,
@@ -119,6 +121,205 @@ async function state(cookie: string) {
 	return (await request("/api/me", "GET", undefined, cookie)).json();
 }
 describe("HTTP identity and privacy", () => {
+	it("blocks new signups and contact opt-ins in coming-soon mode, including direct API requests", async () => {
+		config.event.comingSoon = true;
+		const cookie = await login();
+		const current = await state(cookie);
+		expect(current.comingSoon).toBe(true);
+		const response = await request(
+			"/api/response",
+			"PUT",
+			{ attendance: "coming", button: null },
+			cookie,
+			current.csrf,
+		);
+		expect(response.status).toBe(409);
+		const preference = await request(
+			"/api/preferences",
+			"PUT",
+			{ expectedVersion: current.responseVersion, futureMeetups: true },
+			cookie,
+			current.csrf,
+		);
+		expect(preference.status).toBe(409);
+		expect(db.get(identity)).toBeNull();
+		expect(db.preference(identity)).toBeNull();
+		config.event.comingSoon = false;
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+	});
+	it("keeps public event information, calendars and images available while coming soon", async () => {
+		config.event.comingSoon = true;
+		config.publicDirectory = join(process.cwd(), "public");
+		const page = await request("/");
+		expect(page.status).toBe(200);
+		const html = await page.text();
+		expect(html).toContain('data-coming-soon="true"');
+		expect(html).toContain("Signups coming soon");
+		expect(html).toContain(config.event.description);
+		expect(html).toContain(config.event.venue.address);
+		for (const path of [
+			"/meetup.ics",
+			"/social-preview.png",
+			"/site.webmanifest",
+			"/client-metadata.json",
+			"/jwks.json",
+		])
+			expect((await request(path)).status).toBe(200);
+	});
+	it("blocks artwork edits but permits artwork withdrawal without unsubscribing", async () => {
+		const cookie = await login();
+		let current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: "pfp", futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		config.event.comingSoon = true;
+		current = await state(cookie);
+		const before = current.response;
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: "handle", label: "Doc Brown", futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(409);
+		expect((await state(cookie)).response).toEqual(before);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null, futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		current = await state(cookie);
+		expect(current.response.artwork).toBeNull();
+		expect(current.futureMeetups).toBe(true);
+	});
+	it("allows existing attendees to unsubscribe, withdraw and delete while coming soon", async () => {
+		const cookie = await login();
+		let current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null, futureMeetups: true },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		config.event.comingSoon = true;
+		current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/preferences",
+					"PUT",
+					{ expectedVersion: current.responseVersion, futureMeetups: false },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "cant", button: null },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		current = await state(cookie);
+		expect(
+			(
+				await request(
+					"/api/signup",
+					"DELETE",
+					{ expectedVersion: current.responseVersion },
+					cookie,
+					current.csrf,
+				)
+			).status,
+		).toBe(200);
+		expect(db.get(identity)).toBeNull();
+		expect(db.preference(identity)).toBeNull();
+	});
+	it("serves alternate event copy, calendar and manifest from the same config", async () => {
+		config.publicDirectory = join(process.cwd(), "public");
+		config.event = {
+			...config.event,
+			name: "Back to the Future meetup",
+			community: "Hill Valley time travelers",
+			tagline: "Meet local friends.",
+			description: "An independent meetup.",
+			startAt: "1955-11-05T18:00:00Z",
+			endAt: "1955-11-05T21:00:00Z",
+			timeZone: "Europe/London",
+			locale: "en-GB",
+			calendarUid: "19551105-time-travelers@example.com",
+			venue: {
+				name: "Doc Brown's house",
+				address: "1640 Riverside Drive",
+				url: "https://venue.example.com/",
+			},
+			branding: {
+				...config.event.branding,
+				name: "Back to the Future",
+				shortName: "Time travelers",
+				markAlt: "Community mark",
+				socialImageAlt: "Meetup artwork",
+			},
+		};
+		const page = await request("/");
+		expect(page.status).toBe(200);
+		expect(page.headers.get("content-security-policy")).toContain("manifest-src 'self'");
+		const html = await page.text();
+		expect(html).toContain("Back to the Future meetup");
+		expect(html).toContain("Saturday, 5 November 1955");
+		expect(html).toContain("1640 Riverside Drive");
+		expect(html).toContain("18:00–21:00 GMT");
+		expect(html).toContain(`${origin}/social-preview.png`);
+		expect(html).not.toMatch(/Hill Valley Bluesky|\{\{/);
+		const calendar = await request("/meetup.ics");
+		expect(calendar.headers.get("content-type")).toBe("text/calendar; charset=utf-8");
+		expect(await calendar.text()).toContain("DTSTART:19551105T180000Z");
+		const manifest = await request("/site.webmanifest");
+		expect(JSON.parse(await manifest.text())).toMatchObject({
+			name: "Back to the Future",
+			short_name: "Time travelers",
+		});
+		expect((await request("/event.json")).status).toBe(404);
+	});
 	it("grants no operator privileges when ADMIN_DIDS is unset", async () => {
 		config.adminDids = readAdminDids({});
 		const cookie = await login(admin);

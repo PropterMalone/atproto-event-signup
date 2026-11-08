@@ -13,6 +13,8 @@ import {
 } from "../shared/button.js";
 import { loginHandle } from "../shared/handle.js";
 import type { ClientState } from "../shared/types.js";
+import type { EventConfig } from "./config.js";
+import { eventCalendar, eventManifest, renderEventPage } from "./event.js";
 import type { OAuthBoundary } from "./oauth.js";
 import { parseResponse } from "./policy.js";
 import { printSheet } from "./print.js";
@@ -25,6 +27,7 @@ import {
 import type { Store } from "./store.js";
 export interface AppConfig {
 	origin: string;
+	event: EventConfig;
 	adminDids: Set<string>;
 	responseCutoff: number | null;
 	buttonCutoff: number | null;
@@ -88,7 +91,7 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 		res.setHeader("Referrer-Policy", "no-referrer");
 		res.setHeader(
 			"Content-Security-Policy",
-			"default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+			"default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self' data:; manifest-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
 		);
 		if (config.origin.startsWith("https:"))
 			res.setHeader("Strict-Transport-Security", "max-age=31536000");
@@ -174,6 +177,7 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 			if (url.pathname === "/api/me" && method === "GET") {
 				const response = session ? db.get(session.profile.did) : null;
 				const state: ClientState = {
+					comingSoon: config.event.comingSoon ?? false,
 					profile: session?.profile ?? null,
 					csrf: session?.csrf ?? "",
 					response,
@@ -218,7 +222,7 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 								409,
 								"Set PRINT_CUT_DIAMETER_MM explicitly and test it against your actual cutter and press before exporting.",
 							);
-						res.setHeader("Content-Disposition", 'attachment; filename="dcbsky-home-print.html"');
+						res.setHeader("Content-Disposition", 'attachment; filename="event-buttons.html"');
 						return send(
 							200,
 							printSheet(
@@ -255,6 +259,15 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 						fields.expectedVersion.length > 64
 					)
 						throw new RequestError(400, "Invalid preference fields");
+					if (
+						config.event.comingSoon &&
+						fields.futureMeetups &&
+						!db.preference(session.profile.did)
+					)
+						throw new RequestError(
+							409,
+							"Signups are coming soon; new contact opt-ins are not open yet.",
+						);
 					if (!db.setPreference(session.profile, fields.futureMeetups, now, fields.expectedVersion))
 						throw conflict();
 					return send(200, { ok: true });
@@ -287,6 +300,18 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 						throw new RequestError(400, "Invalid response fields");
 					if (db.version(session.profile.did) !== expectedVersion) throw conflict();
 					const old = db.get(session.profile.did);
+					if (
+						config.event.comingSoon &&
+						(!old ||
+							(input.attendance !== old.attendance &&
+								input.attendance !== "cant" &&
+								input.attendance !== null) ||
+							(input.futureMeetups && !db.preference(session.profile.did)))
+					)
+						throw new RequestError(
+							409,
+							"Signups are coming soon; you can still withdraw or delete existing choices.",
+						);
 					if (input.button && input.attendance !== "cant") {
 						const source = old?.artwork && !input.replaceArtwork ? old.artwork : session.profile;
 						if (approvedSource !== artworkSource(source)) throw conflict();
@@ -344,7 +369,8 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 									old.artwork.rendererVersion !== BUTTON_RENDERER_VERSION)));
 					if (
 						changedButton &&
-						((config.buttonCutoff !== null && now >= config.buttonCutoff) ||
+						(config.event.comingSoon ||
+							(config.buttonCutoff !== null && now >= config.buttonCutoff) ||
 							(config.artworkDeleteAt !== null && now >= config.artworkDeleteAt))
 					)
 						throw new RequestError(
@@ -361,25 +387,41 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 					return send(200, saved);
 				}
 			}
+			if (method === "GET" && url.pathname === "/meetup.ics")
+				return send(
+					200,
+					eventCalendar(config.event, config.origin),
+					"text/calendar; charset=utf-8",
+				);
+			if (method === "GET" && url.pathname === "/site.webmanifest")
+				return send(200, eventManifest(config.event), "application/manifest+json; charset=utf-8");
 			const publicAssets: Record<string, { file: string; type: string }> = {
 				"/": { file: "index.html", type: "text/html; charset=utf-8" },
 				"/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
 				"/style.css": { file: "style.css", type: "text/css; charset=utf-8" },
-				"/happy-hour.ics": { file: "happy-hour.ics", type: "text/calendar; charset=utf-8" },
-				"/social-preview.png": { file: "social-preview.png", type: "image/png" },
-				"/favicon.svg": { file: "favicon.svg", type: "image/svg+xml" },
-				"/favicon-32.png": { file: "favicon-32.png", type: "image/png" },
-				"/apple-touch-icon.png": { file: "apple-touch-icon.png", type: "image/png" },
-				"/icon-192.png": { file: "icon-192.png", type: "image/png" },
-				"/icon-512.png": { file: "icon-512.png", type: "image/png" },
-				"/site.webmanifest": {
-					file: "site.webmanifest",
-					type: "application/manifest+json; charset=utf-8",
-				},
 			};
+			for (const path of [
+				config.event.branding.mark,
+				config.event.branding.favicon,
+				config.event.branding.favicon32,
+				config.event.branding.appleTouchIcon,
+				config.event.branding.icon192,
+				config.event.branding.icon512,
+				config.event.branding.socialImage,
+			])
+				publicAssets[path] = {
+					file: path.slice(1),
+					type: path.endsWith(".svg") ? "image/svg+xml" : "image/png",
+				};
 			const asset = publicAssets[url.pathname];
 			if (method === "GET" && asset) {
 				const content = await readFile(join(config.publicDirectory, asset.file));
+				if (url.pathname === "/")
+					return send(
+						200,
+						renderEventPage(content.toString("utf8"), config.event, config.origin),
+						asset.type,
+					);
 				return send(200, content, asset.type);
 			}
 			return send(404, { error: "Not found" });

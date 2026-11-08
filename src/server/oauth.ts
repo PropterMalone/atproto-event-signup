@@ -20,6 +20,7 @@ export async function createOAuth(
 	origin: string,
 	directory: string,
 	db: Store,
+	clientName = "Bluesky meetup",
 ): Promise<OAuthBoundary> {
 	const local = origin.startsWith("http:");
 	const path = join(directory, "oauth-key.json");
@@ -37,7 +38,7 @@ export async function createOAuth(
 			client_id: local
 				? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=atproto`
 				: `${origin}/client-metadata.json`,
-			client_name: "DC Bluesky happy hour",
+			client_name: clientName,
 			...(local ? {} : { client_uri: origin }),
 			application_type: "web",
 			grant_types: ["authorization_code", "refresh_token"],
