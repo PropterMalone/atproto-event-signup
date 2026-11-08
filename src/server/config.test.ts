@@ -154,6 +154,7 @@ describe("public event configuration", () => {
 			schema.properties,
 			schema.properties.venue.properties,
 			schema.properties.branding.properties,
+			schema.properties.copy.patternProperties["^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"].properties,
 		];
 		for (const fields of properties) {
 			for (const field of Object.values(fields) as Record<string, unknown>[]) {
@@ -172,6 +173,8 @@ describe("public event configuration", () => {
 		{ ...event, branding: { ...event.branding, colour: "#0560ff" } },
 		{ ...event, ADMIN_DIDS: admin },
 		{ ...event, $schema: 123 },
+		{ ...event, copy: { "en-GB": { unknown: "Not allowed" } } },
+		{ ...event, copy: { not_a_locale: { textColor: "Text colour" } } },
 	])("rejects unknown keys and invalid schema metadata in the editor and app", (input) => {
 		expect(validate(input)).toBe(false);
 		expect(() => parseEventConfig(input)).toThrow();

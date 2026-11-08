@@ -3,6 +3,7 @@ import { validateOrigin } from "./policy.js";
 export interface EventConfig {
 	$schema?: string;
 	comingSoon?: boolean;
+	copy?: Record<string, EventCopy>;
 	name: string;
 	community: string;
 	tagline: string;
@@ -34,6 +35,12 @@ export interface EventConfig {
 	};
 }
 
+export interface EventCopy {
+	organizersOnly?: string;
+	signupPrivacy?: string;
+	textColor?: string;
+}
+
 export function parseEventConfig(input: unknown): EventConfig {
 	function object(
 		value: unknown,
@@ -61,6 +68,7 @@ export function parseEventConfig(input: unknown): EventConfig {
 	const root = object(input, "root", [
 		"$schema",
 		"comingSoon",
+		"copy",
 		"name",
 		"community",
 		"tagline",
@@ -112,6 +120,34 @@ export function parseEventConfig(input: unknown): EventConfig {
 		root.footerText === undefined ? undefined : text(root.footerText, "footerText");
 	const footerLink =
 		root.footerLink === undefined ? undefined : text(root.footerLink, "footerLink");
+	let copy: EventConfig["copy"];
+	if (root.copy !== undefined) {
+		if (!root.copy || typeof root.copy !== "object" || Array.isArray(root.copy))
+			throw Error("Event config copy must be an object keyed by locale");
+		copy = {};
+		for (const [locale, value] of Object.entries(root.copy)) {
+			let canonicalLocale: string;
+			try {
+				canonicalLocale = Intl.getCanonicalLocales(locale)[0] ?? "";
+			} catch {
+				canonicalLocale = "";
+			}
+			if (!canonicalLocale)
+				throw Error(`Event config copy locale ${locale} must be a valid BCP 47 locale`);
+			if (copy[canonicalLocale])
+				throw Error(`Event config copy contains duplicate locale ${canonicalLocale}`);
+			const fields = object(value, `copy.${locale}`, [
+				"organizersOnly",
+				"signupPrivacy",
+				"textColor",
+			]);
+			const localized: EventCopy = {};
+			for (const field of ["organizersOnly", "signupPrivacy", "textColor"] as const)
+				if (fields[field] !== undefined)
+					localized[field] = text(fields[field], `copy.${locale}.${field}`);
+			copy[canonicalLocale] = localized;
+		}
+	}
 	if (footerLink !== undefined) {
 		try {
 			const url = new URL(footerLink);
@@ -202,6 +238,7 @@ export function parseEventConfig(input: unknown): EventConfig {
 	}
 	return {
 		...values,
+		...(copy === undefined ? {} : { copy }),
 		...(footerText === undefined ? {} : { footerText }),
 		...(footerLink === undefined ? {} : { footerLink }),
 		...(root.$schema === undefined ? {} : { $schema: text(root.$schema, "$schema") }),

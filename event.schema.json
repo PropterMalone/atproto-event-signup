@@ -82,6 +82,36 @@
 				}
 			]
 		},
+		"copy": {
+			"type": "object",
+			"description": "Optional interface wording overrides keyed by BCP 47 locale. Overrides for the exact locale take precedence over language-only overrides; omitted keys use the default wording.",
+			"patternProperties": {
+				"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"organizersOnly": {
+							"description": "Localized label indicating that the operator section is restricted to organizers.",
+							"examples": ["Organisers only"],
+							"allOf": [{ "$ref": "#/definitions/text" }]
+						},
+						"signupPrivacy": {
+							"description": "Localized sentence explaining who can see a signup.",
+							"examples": [
+								"Your signup is visible to organisers. Sign in again to change or delete it."
+							],
+							"allOf": [{ "$ref": "#/definitions/text" }]
+						},
+						"textColor": {
+							"description": "Localized label for the button text color selector.",
+							"examples": ["Text colour"],
+							"allOf": [{ "$ref": "#/definitions/text" }]
+						}
+					}
+				}
+			},
+			"additionalProperties": false
+		},
 		"footerText": {
 			"description": "Optional plain text displayed immediately before footerLink, or on its own when no footerLink is set.",
 			"examples": ["Image source:"],

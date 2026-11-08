@@ -44,6 +44,31 @@ describe("public social preview", () => {
 		for (const key of ["title", "description", "image", "image:alt"])
 			expect(meta(`twitter:${key}`)).toBe(meta(`og:${key}`));
 	});
+	it("selects interface copy by locale and falls back to default wording", () => {
+		const british = landingPage(
+			parseEventConfig({
+				...event,
+				locale: "en-GB",
+				copy: {
+					"en-GB": {
+						organizersOnly: "Organisers only",
+						signupPrivacy:
+							"Your signup is visible to organisers. Sign in again to change or delete it.",
+						textColor: "Text colour",
+					},
+				},
+			}),
+		);
+		expect(british.querySelector(".private-label")?.textContent).toBe("Organisers only");
+		expect(british.querySelector('label[for="text-color"]')?.textContent).toBe("Text colour");
+		expect(british.querySelector(".privacy-copy p")?.textContent).toBe(
+			"Your signup is visible to organisers. Sign in again to change or delete it.",
+		);
+
+		const american = landingPage(parseEventConfig({ ...event, locale: "en-US" }));
+		expect(american.querySelector(".private-label")?.textContent).toBe("Organizers only");
+		expect(american.querySelector('label[for="text-color"]')?.textContent).toBe("Text color");
+	});
 	it("renders optional footer text before the HTTPS link and allows text alone", () => {
 		const footerText = "<b>Image source:</b>";
 		const footerLink = "https://commons.wikimedia.org/wiki/Main_Page";

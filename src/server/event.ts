@@ -56,6 +56,8 @@ export function renderEventPage(
 			? `${location}. Website to be announced.`
 		: `${location}. Visit website (opens in a new tab)`;
 	const description = `${event.description} ${dateLabel}, ${timeLabel} at ${location}.`;
+	const locale = Intl.getCanonicalLocales(event.locale)[0] ?? event.locale;
+	const copy = event.copy?.[locale] ?? event.copy?.[locale.split("-")[0] ?? ""];
 	const calendar = new URL("https://calendar.google.com/calendar/render");
 	calendar.search = new URLSearchParams({
 		action: "TEMPLATE",
@@ -69,6 +71,11 @@ export function renderEventPage(
 		comingSoon: String(event.comingSoon ?? false),
 		locale: event.locale,
 		timeZone: event.timeZone,
+		organizersOnly: copy?.organizersOnly ?? "Organizers only",
+		signupPrivacy:
+			copy?.signupPrivacy ??
+			"Your signup is visible to organizers. Sign in again to change or delete it.",
+		textColor: copy?.textColor ?? "Text color",
 		eventName: event.name,
 		community: event.community,
 		tagline: event.tagline,

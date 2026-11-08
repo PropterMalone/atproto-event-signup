@@ -79,7 +79,7 @@
 <div id="button-design" hidden>
 <div class="button-controls"><label for="style">Design</label><select id="style"><option value="handle">Profile picture + name</option><option value="pfp">Profile picture only</option></select>
 <div id="position-option"><label for="text-position">Text position</label><select id="text-position"><option value="bottom">Bottom</option><option value="top">Top</option></select></div>
-<div id="color-option"><label for="text-color">Text color</label><select id="text-color"><option value="white">White</option><option value="black">Black</option></select></div>
+<div id="color-option"><label for="text-color">{{textColor}}</label><select id="text-color"><option value="white">White</option><option value="black">Black</option></select></div>
 <div id="label-option"><label for="button-label">Name on your button</label><input id="button-label" maxlength="160" aria-describedby="label-help"><p id="label-help" class="field-help">List your display name or your actual name or whatever you want on your button.</p></div></div>
 <figure id="preview" aria-label="Your button preview" hidden></figure>
 <p id="artwork-note" class="field-help" role="status"></p>
@@ -94,7 +94,7 @@
 </div>
 </div>
 <section id="operator" class="operator-card" aria-labelledby="operator-heading" hidden>
-<div class="operator-heading"><h2 id="operator-heading">Manage signups</h2><span class="private-label">Organizers only</span></div>
+<div class="operator-heading"><h2 id="operator-heading">Manage signups</h2><span class="private-label">{{organizersOnly}}</span></div>
 <p id="counts"></p><p><a class="export-link" href="/api/admin/print" download="event-buttons.html">Download button artwork <span aria-hidden="true">↓</span></a></p><p class="field-help">Re-export before printing to include changes. Test print size against your cutter.</p>
 <div class="table-scroll"><table><caption>Signups</caption><thead><tr><th>Account</th><th>Attendance</th><th>Button</th></tr></thead><tbody id="responses"></tbody></table></div>
 <h3>Future meetup contacts</h3><label for="contact-filter">Filter accounts</label><input id="contact-filter" type="search" placeholder="Handle or account ID"><p id="contact-count" class="field-help"></p><div class="table-scroll"><table><thead><tr><th>Account</th><th>DID</th><th>Opted in</th></tr></thead><tbody id="future-contacts"></tbody></table></div>
@@ -102,7 +102,7 @@
 <footer class="community-footer">
 <p>Independent community meetup. <span>No public attendee list.</span></p>
 {{footerInfo}}
-<details><summary>Privacy &amp; your signup</summary><div class="privacy-copy"><p>Your signup is visible to organizers. Sign in again to change or delete it.</p><p id="policy"></p><p>Signing in doesn’t submit a response or request a button. We don’t post, follow, or send automatic messages. Choosing “Not this time” cancels your button request, not your future-meetup preference.</p><p>If you choose future meetups, organizers keep your Bluesky account and opt-in date to contact you about another meetup. No email. Uncheck it and save to unsubscribe, whether or not you’re coming to this event.</p><p>Deleting your signup removes your attendance, saved artwork and future-meetup preference, but not copies already downloaded or printed. A hashed account marker remains to prevent old tabs restoring deleted requests. Signing out doesn’t delete your signup.</p></div></details>
+<details><summary>Privacy &amp; your signup</summary><div class="privacy-copy"><p>{{signupPrivacy}}</p><p id="policy"></p><p>Signing in doesn’t submit a response or request a button. We don’t post, follow, or send automatic messages. Choosing “Not this time” cancels your button request, not your future-meetup preference.</p><p>If you choose future meetups, organizers keep your Bluesky account and opt-in date to contact you about another meetup. No email. Uncheck it and save to unsubscribe, whether or not you’re coming to this event.</p><p>Deleting your signup removes your attendance, saved artwork and future-meetup preference, but not copies already downloaded or printed. A hashed account marker remains to prevent old tabs restoring deleted requests. Signing out doesn’t delete your signup.</p></div></details>
 </footer>
 </main>
 </body>
