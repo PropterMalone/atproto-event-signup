@@ -10,15 +10,19 @@ afterEach(() => {
 	document.body.replaceChildren();
 	vi.resetModules();
 });
-async function page() {
+async function page(config?: Awaited<ReturnType<typeof loadEventConfig>>) {
+	const event = config ?? (await loadEventConfig());
 	const html = renderEventPage(
 		await readFile("public/index.html", "utf8"),
-		await loadEventConfig(),
+		event,
 	);
 	const parser = new Window({
 		settings: { disableCSSFileLoading: true, disableJavaScriptFileLoading: true },
 	}).DOMParser;
-	document.body.innerHTML = new parser().parseFromString(html, "text/html").body.innerHTML;
+	const rendered = new parser().parseFromString(html, "text/html");
+	document.documentElement.lang = rendered.documentElement.lang;
+	document.documentElement.dataset.timeZone = rendered.documentElement.dataset.timeZone ?? "";
+	document.body.innerHTML = rendered.body.innerHTML;
 }
 const tick = async () => {
 	await vi.waitFor(() => expect(document.getElementById("status")?.textContent).toBe(""));
@@ -212,7 +216,8 @@ it("previews saved consent snapshot, permits PFP-only, and decline unchecks butt
 	expect(document.getElementById("replacement-option")?.hidden).toBe(true);
 });
 it("renders and filters the private operator future-contact list without treating it as attendance", async () => {
-	await page();
+	const event = await loadEventConfig();
+	await page({ ...event, locale: "en-GB", timeZone: "Europe/London" });
 	const state: ClientState = {
 		profile: { did: "did:plc:operator", handle: "operator.test", avatar: null },
 		csrf: "secret",
@@ -248,8 +253,16 @@ it("renders and filters the private operator future-contact list without treatin
 	);
 	await import("./main.js");
 	await tick();
+	expect(document.documentElement.lang).toBe("en-GB");
+	expect(document.documentElement.dataset.timeZone).toBe("Europe/London");
 	expect(document.getElementById("counts")?.textContent).toContain("Future meetups: 2");
 	expect(document.getElementById("contact-count")?.textContent).toBe("2 of 2 contacts");
+	expect(document.querySelector("#future-contacts tr")?.textContent).toContain(
+		new Date(100).toLocaleString("en-GB", {
+			timeZone: "Europe/London",
+			timeZoneName: "short",
+		}),
+	);
 	const filter = document.getElementById("contact-filter") as HTMLInputElement;
 	filter.value = "DID:PLC:BOB";
 	filter.dispatchEvent(new Event("input"));

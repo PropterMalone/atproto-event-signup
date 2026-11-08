@@ -68,6 +68,7 @@ export function renderEventPage(
 	const values: Record<string, string> = {
 		comingSoon: String(event.comingSoon ?? false),
 		locale: event.locale,
+		timeZone: event.timeZone,
 		eventName: event.name,
 		community: event.community,
 		tagline: event.tagline,

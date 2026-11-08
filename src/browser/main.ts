@@ -165,8 +165,8 @@ async function load() {
 			element<HTMLInputElement | HTMLSelectElement>(id).disabled = !!state.comingSoon;
 	}
 	const date = (value: number) =>
-		new Date(value).toLocaleString("en-US", {
-			timeZone: "America/New_York",
+		new Date(value).toLocaleString(document.documentElement.lang, {
+			timeZone: document.documentElement.dataset.timeZone,
 			timeZoneName: "short",
 		});
 	const deadlines: string[] = [];
