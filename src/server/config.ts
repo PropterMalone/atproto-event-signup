@@ -7,6 +7,8 @@ export interface EventConfig {
 	community: string;
 	tagline: string;
 	description: string;
+	footerText?: string;
+	footerLink?: string;
 	origin: string;
 	startAt: string;
 	endAt: string;
@@ -63,6 +65,8 @@ export function parseEventConfig(input: unknown): EventConfig {
 		"community",
 		"tagline",
 		"description",
+		"footerText",
+		"footerLink",
 		"origin",
 		"startAt",
 		"endAt",
@@ -104,6 +108,18 @@ export function parseEventConfig(input: unknown): EventConfig {
 		"locale",
 	])
 		values[field] = text(root[field], field);
+	const footerText =
+		root.footerText === undefined ? undefined : text(root.footerText, "footerText");
+	const footerLink =
+		root.footerLink === undefined ? undefined : text(root.footerLink, "footerLink");
+	if (footerLink !== undefined) {
+		try {
+			const url = new URL(footerLink);
+			if (url.protocol !== "https:" || !url.hostname || url.username || url.password) throw Error();
+		} catch {
+			throw Error("Event config footerLink must be a public HTTPS URL");
+		}
+	}
 	if (root.calendarUid !== undefined || root.comingSoon !== true)
 		values.calendarUid =
 			root.comingSoon === true && root.calendarUid === ""
@@ -186,6 +202,8 @@ export function parseEventConfig(input: unknown): EventConfig {
 	}
 	return {
 		...values,
+		...(footerText === undefined ? {} : { footerText }),
+		...(footerLink === undefined ? {} : { footerLink }),
 		...(root.$schema === undefined ? {} : { $schema: text(root.$schema, "$schema") }),
 		...(root.comingSoon === undefined ? {} : { comingSoon: root.comingSoon }),
 		venue: venueValues,

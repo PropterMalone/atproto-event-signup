@@ -98,7 +98,16 @@ export function renderEventPage(
 	const venueStart = websitePending
 		? `<div class="event-detail venue-card" role="group" aria-label="${escapeXml(venueLabel)}">`
 		: `<a class="event-detail venue-card" href="${escapeXml(event.venue.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeXml(venueLabel)}">`;
+	const footerInfo =
+		event.footerText || event.footerLink
+			? `<p class="footer-info">${event.footerText ? `${escapeXml(event.footerText)}${event.footerLink ? " " : ""}` : ""}${
+					event.footerLink
+						? `<a href="${escapeXml(event.footerLink)}" target="_blank" rel="noopener noreferrer">${escapeXml(event.footerLink)}</a>`
+						: ""
+				}</p>`
+			: "";
 	const markup = template
+		.replaceAll("{{footerInfo}}", footerInfo)
 		.replaceAll("{{venueStart}}", venueStart)
 		.replaceAll("{{venueEnd}}", websitePending ? "</div>" : "</a>")
 		.replaceAll(

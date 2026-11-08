@@ -44,6 +44,31 @@ describe("public social preview", () => {
 		for (const key of ["title", "description", "image", "image:alt"])
 			expect(meta(`twitter:${key}`)).toBe(meta(`og:${key}`));
 	});
+	it("renders optional footer text before the HTTPS link and allows text alone", () => {
+		const footerText = "<b>Image source:</b>";
+		const footerLink = "https://commons.wikimedia.org/wiki/Main_Page";
+		const page = landingPage(parseEventConfig({ ...event, footerText, footerLink }));
+		const footerInfo = page.querySelector(".footer-info");
+		const link = page.querySelector(".footer-info a");
+		expect(footerInfo?.textContent).toBe(`${footerText} ${footerLink}`);
+		expect(footerInfo?.querySelector("b")).toBeNull();
+		expect(link?.getAttribute("href")).toBe(footerLink);
+		expect(link?.textContent).toBe(footerLink);
+		expect(link?.getAttribute("target")).toBe("_blank");
+		expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+
+		const { footerLink: _footerLink, ...withoutFooterLink } = event;
+		expect(landingPage(withoutFooterLink).querySelector(".footer-info")).toBeNull();
+		const textOnly = landingPage(
+			parseEventConfig({ ...withoutFooterLink, footerText: "Extra note" }),
+		);
+		expect(textOnly.querySelector(".footer-info")?.textContent).toBe("Extra note");
+		expect(textOnly.querySelector(".footer-info a")).toBeNull();
+		expect(() => parseEventConfig({ ...event, footerText: "" })).toThrow("footerText");
+		expect(() => parseEventConfig({ ...event, footerLink: "javascript:alert(1)" })).toThrow(
+			"footerLink",
+		);
+	});
 	it.each([
 		["1955-11-05T18:00:00Z", "1955-11-05T21:00:00Z", "18:00", "GMT"],
 		["2015-10-21T18:00:00+01:00", "2015-10-21T21:00:00+01:00", "18:00", "BST"],

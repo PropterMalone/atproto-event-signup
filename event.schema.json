@@ -82,6 +82,16 @@
 				}
 			]
 		},
+		"footerText": {
+			"description": "Optional plain text displayed immediately before footerLink, or on its own when no footerLink is set.",
+			"examples": ["Image source:"],
+			"allOf": [{ "$ref": "#/definitions/text" }]
+		},
+		"footerLink": {
+			"description": "Optional public HTTPS URL shown as a link in the page footer. The URL itself is used as the link text.",
+			"examples": ["https://commons.wikimedia.org/wiki/Main_Page"],
+			"allOf": [{ "$ref": "#/definitions/venueUrl" }]
+		},
 		"origin": {
 			"allOf": [
 				{

@@ -608,6 +608,11 @@ footer {
 .community-footer > p {
 	margin: 0;
 }
+.community-footer .footer-info {
+	max-width: 24rem;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
 footer > p span {
 	display: block;
 	margin-top: 3px;
