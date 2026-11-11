@@ -1,3 +1,10 @@
+import type { AttendanceVisibility } from "./visibility.js";
+
+export interface DirectoryEntry {
+	did: string;
+	handle: string;
+	attendance: "coming" | "maybe";
+}
 export type Attendance = "coming" | "maybe" | "cant" | null;
 export type ButtonStyle = "handle" | "pfp" | null;
 export type TextPosition = "top" | "bottom";
@@ -9,6 +16,7 @@ export interface Profile {
 }
 export interface ResponseInput {
 	attendance: Attendance;
+	visibility?: AttendanceVisibility;
 	button: ButtonStyle;
 	replaceArtwork?: boolean;
 	label?: string;
@@ -35,6 +43,7 @@ export interface SavedResponse {
 	did: string;
 	handle: string;
 	attendance: Attendance;
+	visibility?: AttendanceVisibility;
 	artwork: Artwork | null;
 	updatedAt: number;
 }
@@ -44,6 +53,7 @@ export interface Session {
 	expires: number;
 }
 export interface ClientState {
+	share?: { url: string };
 	profile: Profile | null;
 	csrf: string;
 	response: SavedResponse | null;

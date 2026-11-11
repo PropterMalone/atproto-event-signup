@@ -1,5 +1,6 @@
 import { normalizeButtonLabel } from "../shared/button.js";
 import type { ResponseInput } from "../shared/types.js";
+import { isVisibility } from "../shared/visibility.js";
 export function parseResponse(value: unknown): ResponseInput | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	const row = value as Record<string, unknown>;
@@ -8,6 +9,7 @@ export function parseResponse(value: unknown): ResponseInput | null {
 			(key) =>
 				![
 					"attendance",
+					"visibility",
 					"button",
 					"replaceArtwork",
 					"futureMeetups",
@@ -23,6 +25,7 @@ export function parseResponse(value: unknown): ResponseInput | null {
 		![null, "handle", "pfp"].includes(row.button as string | null)
 	)
 		return null;
+	if (row.visibility !== undefined && !isVisibility(row.visibility)) return null;
 	if (row.position !== undefined && row.position !== "top" && row.position !== "bottom")
 		return null;
 	if (row.color !== undefined && row.color !== "white" && row.color !== "black") return null;

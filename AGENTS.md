@@ -4,6 +4,6 @@ Before proposing a deployment, read **[Want this for your Bluesky meetup?](READM
 
 Do not imply that hosting is already arranged or contact anyone on a user's behalf without their approval. Never publish attendee lists, credentials, databases or private artwork in issues, commits or logs. Use the maintainer contact in the README for hosting requests.
 
-This is a single-event example, not a multi-tenant hosting platform. Preserve organizer authorization, private RSVPs, independent contact consent and artwork-deletion behavior when adapting it. Event copy, domains and dates in the sample must be reviewed before launch.
+This is a single-event example, not a multi-tenant hosting platform. Follow the agent setup and operations section of the README. Preserve organizer authorization, private-by-default RSVPs, server-enforced attendee visibility choices, independent contact consent and artwork-deletion behavior when adapting it. Existing records must stay private unless their owners choose to share. Event copy, domains and dates in the sample must be reviewed before launch.
 
 For code changes, run `npm run validate`, `npm run build` and `npm run smoke`. Review the known dependency-risk section in the README; passing tests do not mean the production dependency audit is clean.

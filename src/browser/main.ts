@@ -11,9 +11,15 @@ import type {
 	Attendance,
 	ButtonStyle,
 	ClientState,
+	DirectoryEntry,
 	TextColor,
 	TextPosition,
 } from "../shared/types.js";
+import {
+	type AttendanceVisibility,
+	storedVisibility,
+	visibilityLabels,
+} from "../shared/visibility.js";
 
 function element<T extends HTMLElement>(id: string): T {
 	const el = document.getElementById(id);
@@ -23,6 +29,8 @@ function element<T extends HTMLElement>(id: string): T {
 const status = element("status");
 let state: ClientState;
 let artworkEdited = false;
+let loadGeneration = 0;
+let accountGeneration = 0;
 async function api(path: string, method = "GET", body?: unknown) {
 	const response = await fetch(path, {
 		method,
@@ -93,7 +101,54 @@ function preview() {
 						? ""
 						: "No profile picture available. You can still save your attendance.";
 }
+const visibilitySelect = element<HTMLSelectElement>("visibility");
+for (const [value, label] of Object.entries(visibilityLabels)) {
+	const option = document.createElement("option");
+	option.value = value;
+	option.textContent = label;
+	visibilitySelect.append(option);
+}
+async function loadDirectory(generation: number) {
+	const list = element("directory");
+	list.replaceChildren();
+	element("directory-status").textContent = "Loading shared attendance…";
+	try {
+		const data = await api("/api/directory");
+		if (generation !== loadGeneration) return;
+		for (const entry of (data.entries ?? []) as DirectoryEntry[]) {
+			const li = document.createElement("li");
+			const link = document.createElement("a");
+			link.href = `https://bsky.app/profile/${encodeURIComponent(entry.did)}`;
+			link.textContent = `@${entry.handle}`;
+			link.rel = "noopener noreferrer";
+			li.append(link, ` — ${entry.attendance === "coming" ? "Coming" : "Maybe"}`);
+			list.append(li);
+		}
+		element("directory-status").textContent = data.incomplete
+			? list.children.length
+				? "Some shared attendance could not be checked. Showing only entries confirmed visible to you."
+				: "Some shared attendance could not be checked. No entries could be confirmed visible to you."
+			: list.children.length
+				? ""
+				: "No attendance shared with you yet.";
+	} catch {
+		if (generation === loadGeneration)
+			element("directory-status").textContent = "Shared attendance is temporarily unavailable.";
+	}
+}
 function savedSummary() {
+	const share = element<HTMLAnchorElement>("share-attendance");
+	const canShare = !!state.profile && state.response?.attendance === "coming";
+	share.hidden = !canShare;
+	element("share-help").hidden = !canShare;
+	if (canShare) {
+		const url = new URL("https://bsky.app/intent/compose");
+		url.searchParams.set(
+			"text",
+			`I’m coming to this meetup! ${state.share?.url ?? location.origin + "/"}`,
+		);
+		share.href = url.toString();
+	} else share.removeAttribute("href");
 	const attendance = state.response?.attendance;
 	const button = !!state.response?.artwork;
 	const future = state.futureMeetups;
@@ -121,11 +176,18 @@ function savedSummary() {
 					? "Not this time"
 					: "Not answered";
 	element("saved-choices").textContent =
-		`Attendance: ${choice}. Button: ${button ? "Requested" : "Not requested"}. Future meetups: ${future ? "On the list" : "Not on the list"}.`;
+		`Attendance: ${choice}. Visibility: ${visibilityLabels[storedVisibility(state.response?.visibility)]}. Button: ${button ? "Requested" : "Not requested"}. Future meetups: ${future ? "On the list" : "Not on the list"}.`;
 }
 async function load() {
-	state = (await api("/api/me")) as ClientState;
+	const generation = ++loadGeneration;
+	const nextState = (await api("/api/me")) as ClientState;
+	if (generation !== loadGeneration) return;
+	state = nextState;
 	savedSummary();
+	visibilitySelect.value = storedVisibility(state.response?.visibility);
+	element<HTMLButtonElement>("save-visibility").disabled = !state.response;
+	await loadDirectory(generation);
+	if (generation !== loadGeneration) return;
 	artworkEdited = false;
 	element("signed-out").hidden = !!state.profile;
 	element("signed-in").hidden = !state.profile;
@@ -163,11 +225,14 @@ async function load() {
 	element("policy").hidden = deadlines.length === 0;
 	if (state.admin) {
 		const admin = await api("/api/admin");
+		if (generation !== loadGeneration) return;
 		const c = admin.counts;
 		element("counts").textContent =
 			`Coming: ${c.coming} · Maybe: ${c.maybe} · Not this time: ${c.cant} · Button requests: ${c.buttons} · Future meetups: ${c.futureMeetups}`;
 		const { contacts } = await api("/api/admin/futurecontacts");
+		if (generation !== loadGeneration) return;
 		const renderContacts = () => {
+			if (generation !== loadGeneration) return;
 			const query = element<HTMLInputElement>("contact-filter").value.trim().toLowerCase();
 			const rows = contacts.filter((row: { did: string; handle: string }) =>
 				`${row.handle} ${row.did}`.toLowerCase().includes(query),
@@ -221,6 +286,7 @@ for (const id of ["style", "text-position", "text-color", "replace-artwork", "bu
 }
 element<HTMLFormElement>("response").addEventListener("submit", async (event) => {
 	event.preventDefault();
+	const account = accountGeneration;
 	try {
 		const attendance = selectedAttendance();
 		const button = element<HTMLInputElement>("button-opt-in").checked
@@ -241,6 +307,7 @@ element<HTMLFormElement>("response").addEventListener("submit", async (event) =>
 		const preserveArtwork =
 			!!oldArtwork && !artworkEdited && !replaceArtwork && button === oldArtwork.style;
 		const eventUnchanged =
+			visibilitySelect.value === storedVisibility(state.response?.visibility) &&
 			attendance === (state.response?.attendance ?? null) &&
 			button === (state.response?.artwork?.style ?? null) &&
 			!replaceArtwork &&
@@ -253,6 +320,7 @@ element<HTMLFormElement>("response").addEventListener("submit", async (event) =>
 		} else
 			await api("/api/response", "PUT", {
 				attendance,
+				visibility: visibilitySelect.value as AttendanceVisibility,
 				futureMeetups,
 				button,
 				replaceArtwork,
@@ -262,10 +330,27 @@ element<HTMLFormElement>("response").addEventListener("submit", async (event) =>
 				artworkApproval:
 					button && source ? buttonApproval(source, button, label ?? "", position, color) : null,
 			});
+		if (account !== accountGeneration) return;
 		await load();
+		if (account !== accountGeneration) return;
 		status.textContent = "Signup saved. Return here to change or delete it.";
 	} catch (error) {
-		message(error);
+		if (account === accountGeneration) message(error);
+	}
+});
+element("save-visibility").addEventListener("click", async () => {
+	const account = accountGeneration;
+	try {
+		await api("/api/visibility", "PUT", {
+			visibility: visibilitySelect.value,
+			expectedVersion: state.responseVersion,
+		});
+		if (account !== accountGeneration) return;
+		await load();
+		if (account !== accountGeneration) return;
+		status.textContent = "Attendance visibility saved. Other saved choices are unchanged.";
+	} catch (error) {
+		if (account === accountGeneration) message(error);
 	}
 });
 element("cancel").addEventListener("click", async () => {
@@ -275,21 +360,39 @@ element("cancel").addEventListener("click", async () => {
 		)
 	)
 		return;
+	const account = accountGeneration;
 	try {
 		await api("/api/signup", "DELETE", { expectedVersion: state.responseVersion });
+		if (account !== accountGeneration) return;
 		await load();
+		if (account !== accountGeneration) return;
 		status.textContent = "Signup and future-meetup preference deleted.";
 	} catch (error) {
-		message(error);
+		if (account === accountGeneration) message(error);
 	}
 });
 element("logout").addEventListener("click", async () => {
+	accountGeneration++;
+	const generation = ++loadGeneration;
+	state = { ...state, profile: null, response: null, futureMeetups: false, admin: false };
+	savedSummary();
+	element("directory").replaceChildren();
+	element("directory-status").textContent = "";
+	element("signed-in").hidden = true;
+	element("signed-out").hidden = false;
+	element("operator").hidden = true;
+	element("identity").textContent = "";
+	element("counts").textContent = "";
+	element("future-contacts").replaceChildren();
+	element("responses").replaceChildren();
+	element("contact-count").textContent = "";
 	try {
 		await api("/api/logout", "POST", {});
+		if (generation !== loadGeneration) return;
 		await load();
 		status.textContent = "Signed out. Your signup remains until you delete it.";
 	} catch (error) {
-		message(error);
+		if (generation === loadGeneration) message(error);
 	}
 });
 void load()

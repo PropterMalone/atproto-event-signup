@@ -66,6 +66,7 @@
 <section id="signed-in" class="signup-card" aria-labelledby="signup-heading" hidden>
 <div class="card-heading"><h2 id="signup-heading">Your plans</h2><p id="identity" class="account-identity"></p></div>
 <div id="saved-summary" class="saved-summary" role="status" aria-live="polite" aria-atomic="true" hidden><h3 id="saved-heading"></h3><p id="saved-choices"></p><p>You can change your choices below.</p></div>
+<p><a id="share-attendance" target="_blank" rel="noopener noreferrer" hidden>Share my saved Coming response on Bluesky</a></p><p id="share-help" class="field-help" hidden>Optional: opens an editable draft. Nothing is posted until you choose to post on Bluesky. Posting makes that text public, independently of your attendance visibility here.</p>
 <form id="response">
 <fieldset class="attendance-field"><legend>Will you be there?</legend><div class="attendance-options">
 <label class="attendance-choice unanswered"><input type="radio" name="attendance" value="" checked><span>Not answered</span></label>
@@ -73,6 +74,7 @@
 <label class="attendance-choice"><input type="radio" name="attendance" value="maybe"><span>Maybe</span></label>
 <label class="attendance-choice"><input type="radio" name="attendance" value="cant"><span>Not this time</span></label>
 </div></fieldset>
+<fieldset><legend>Who can see my attendance?</legend><label for="visibility">Attendance visibility</label><select id="visibility" aria-describedby="visibility-help"></select><p id="visibility-help" class="field-help">Private by default. Only Coming and Maybe appear in the attendee list. Organizers can always see your signup. Button artwork and future-meetup choices stay private.</p><button id="save-visibility" type="button">Save visibility only</button><p class="field-help">Change visibility even after attendance or button requests close. This does not change your other saved choices.</p></fieldset>
 <fieldset class="button-field"><legend>Your button <span class="optional">optional</span></legend>
 <p class="field-help">NB: people might take pictures so if you are very concerned about pseudonymity, consider not wearing a button or especially putting your wallet name on your button.</p>
 <label class="check-choice"><input type="checkbox" id="button-opt-in"><span>Make me a PFP button<small>A little easier to recognize each other.</small></span></label>
@@ -93,6 +95,7 @@
 </section>
 </div>
 </div>
+<section class="signup-card" aria-labelledby="directory-heading"><h2 id="directory-heading">Who’s coming?</h2><p>Coming and Maybe responses shared with you. This is not a complete attendance count.</p><p id="directory-status" role="status"></p><ul id="directory"></ul></section>
 <section id="operator" class="operator-card" aria-labelledby="operator-heading" hidden>
 <div class="operator-heading"><h2 id="operator-heading">Manage signups</h2><span class="private-label">Organizers only</span></div>
 <p id="counts"></p><p><a class="export-link" href="/api/admin/print" download="dcbsky-home-print.html">Download button artwork <span aria-hidden="true">↓</span></a></p><p class="field-help">Re-export before printing to include changes. Test print size against your cutter.</p>
@@ -100,7 +103,7 @@
 <h3>Future meetup contacts</h3><label for="contact-filter">Filter accounts</label><input id="contact-filter" type="search" placeholder="Handle or account ID"><p id="contact-count" class="field-help"></p><div class="table-scroll"><table><thead><tr><th>Account</th><th>DID</th><th>Opted in</th></tr></thead><tbody id="future-contacts"></tbody></table></div>
 </section>
 <footer class="community-footer">
-<p>Independent community meetup. <span>No public attendee list.</span></p>
+<p>Independent community meetup. <span>Attendance stays private unless you choose to share it.</span></p>
 <details><summary>Privacy &amp; your signup</summary><div class="privacy-copy"><p>Your signup is visible to organizers. Sign in again to change or delete it.</p><p id="policy"></p><p>Signing in doesn’t submit a response or request a button. We don’t post, follow, or send automatic messages. Choosing “Not this time” cancels your button request, not your future-meetup preference.</p><p>If you choose future meetups, organizers keep your Bluesky account and opt-in date to contact you about another meetup. No email. Uncheck it and save to unsubscribe, whether or not you’re coming in November.</p><p>Deleting your signup removes your attendance, saved artwork and future-meetup preference, but not copies already downloaded or printed. A hashed account marker remains to prevent old tabs restoring deleted requests. Signing out doesn’t delete your signup.</p></div></details>
 </footer>
 </main>

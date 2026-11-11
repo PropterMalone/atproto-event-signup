@@ -106,6 +106,113 @@ async function request(
 		...(body === undefined ? {} : { body: JSON.stringify(body) }),
 	});
 }
+it("serves only filtered directory fields and ignores forged viewer identities", async () => {
+	for (const [did, visibility, attendance] of [
+		["public", "public", "maybe"],
+		["private", "private", "coming"],
+		["member", "loggedin", "coming"],
+		["declined", "public", "cant"],
+	] as const) {
+		db.save(
+			{ did: `did:plc:${did}`, handle: `${did}.test`, avatar: null },
+			{ attendance, button: null, visibility, futureMeetups: true },
+			Date.now(),
+			"0",
+		);
+	}
+	const response = await request("/api/directory?viewer=did:plc:private");
+	expect(response.status).toBe(200);
+	expect(response.headers.get("cache-control")).toBe("private, no-store");
+	expect(await response.json()).toEqual({
+		entries: [{ did: "did:plc:public", handle: "public.test", attendance: "maybe" }],
+		incomplete: false,
+	});
+	const cookie = await login("did:plc:member");
+	const authenticated = await request(
+		"/api/directory?viewer=did:plc:private",
+		"GET",
+		undefined,
+		cookie,
+	);
+	const result = await authenticated.json();
+	expect(result.entries.map((r: { handle: string }) => r.handle).sort()).toEqual([
+		"member.test",
+		"public.test",
+	]);
+	expect(JSON.stringify(result)).not.toMatch(/artwork|futureMeetups|updatedAt|private.test|count/);
+});
+it("omits a directory entry withdrawn while relationship lookup is pending", async () => {
+	const ownerDid = "did:plc:bbbbbbbbbbbbbbbbbbbbbbbb";
+	db.save(
+		{ did: ownerDid, handle: "owner.test", avatar: null },
+		{ attendance: "coming", button: null, visibility: "followers", futureMeetups: false },
+		Date.now(),
+		"0",
+	);
+	let resolveLookup!: (
+		value: { viewerFollowsOwner: boolean; ownerFollowsViewer: boolean } | null,
+	) => void;
+	const lookup = new Promise<{ viewerFollowsOwner: boolean; ownerFollowsViewer: boolean } | null>(
+		(resolve) => {
+			resolveLookup = resolve;
+		},
+	);
+	const viewerCookie = await login("did:plc:aaaaaaaaaaaaaaaaaaaaaaaa");
+	server.close();
+	await new Promise<void>((resolve) => server.once("close", resolve));
+	let lookupStarted = false;
+	server = createServer(
+		createApp(db, oauth, {
+			...config,
+			relationshipLookup: async () => {
+				lookupStarted = true;
+				return lookup;
+			},
+		}),
+	);
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const address = server.address();
+	if (!address || typeof address === "string") throw Error("no port");
+	origin = `http://127.0.0.1:${address.port}`;
+	const pending = request("/api/directory", "GET", undefined, viewerCookie);
+	await vi.waitFor(() => expect(lookupStarted).toBe(true));
+	db.save(
+		{ did: ownerDid, handle: "owner.test", avatar: null },
+		{ attendance: null, button: null, visibility: "private", futureMeetups: false },
+		Date.now(),
+		db.version(ownerDid),
+	);
+	resolveLookup({ viewerFollowsOwner: true, ownerFollowsViewer: true });
+	expect((await (await pending).json()).entries).toEqual([]);
+});
+it("allows privacy-only withdrawal after all cutoffs without artwork approval and rejects csrf/stale/invalid input", async () => {
+	const cookie = await login();
+	const { csrf } = await state(cookie);
+	await request(
+		"/api/response",
+		"PUT",
+		{ attendance: "coming", button: "pfp", visibility: "public" },
+		cookie,
+		csrf,
+	);
+	const current = await state(cookie);
+	config.responseCutoff = 1;
+	config.buttonCutoff = 1;
+	const body = { visibility: "private", expectedVersion: current.responseVersion };
+	expect((await request("/api/visibility", "PUT", body, cookie, "forged")).status).toBe(403);
+	expect(
+		(await request("/api/visibility", "PUT", { ...body, visibility: "friends" }, cookie, csrf))
+			.status,
+	).toBe(400);
+	expect((await request("/api/visibility", "PUT", body, cookie, csrf)).status).toBe(200);
+	expect((await state(cookie)).response.visibility).toBe("private");
+	expect((await state(cookie)).response.artwork).toEqual(current.response.artwork);
+	expect(
+		(await request("/api/visibility", "PUT", { ...body, visibility: "public" }, cookie, csrf))
+			.status,
+	).toBe(409);
+	expect((await (await request("/api/directory")).json()).entries).toEqual([]);
+});
 async function login(did = "did:plc:alice") {
 	identity = did;
 	const start = await request("/oauth/login", "POST", { handle: "alice.test" });

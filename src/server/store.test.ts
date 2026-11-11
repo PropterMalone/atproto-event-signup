@@ -41,6 +41,7 @@ describe("durable individual responses and separate consent", () => {
 			attendance: "coming",
 			artwork,
 			updatedAt: 1,
+			visibility: "private",
 		};
 		const bytes = JSON.stringify(old);
 		raw.prepare("INSERT INTO responses VALUES(?,?)").run(profile.did, bytes);
@@ -94,6 +95,7 @@ describe("durable individual responses and separate consent", () => {
 			handle: profile.handle,
 			attendance: "coming",
 			updatedAt: 1,
+			visibility: "private",
 			artwork: {
 				avatar: profile.avatar,
 				handle: profile.handle,
@@ -209,6 +211,7 @@ describe("durable individual responses and separate consent", () => {
 			attendance: "maybe",
 			artwork: null,
 			updatedAt: 10,
+			visibility: "private",
 		};
 		legacy.prepare("INSERT INTO responses VALUES(?,?)").run(profile.did, JSON.stringify(response));
 		legacy.close();

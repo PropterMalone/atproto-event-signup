@@ -1,110 +1,116 @@
-# AT Protocol event signup
+# Bluesky meetup signup
 
-A small event page with Bluesky sign-in and private SQLite storage. Built for a DC community happy hour; the public page in this repository is the worked example. You can run your own copy or ask about free hosting below.
+This is an extremely vibecoded kit I built to support a Bluesky meetup in DC that I then reworked with the intention of making it easier for other people to set up Blue Sky meetups in other cities, or I guess in DC also. It's intended to be run through Claude Code or Codex or whatever agent of your choice.
 
-**AT Protocol verifies identity. RSVPs do not become public records on attendees' PDSes.** The organizer stores individual responses, optional profile-picture button artwork and an independent future-contact preference in a private local database. No email collection, public attendee list, automated DMs or automatic posting.
+Feel free to modify this in whatever way you see fit. It's meant as a jumping-off point, although I've tried to make it relatively complete if you want to just try to run it out of the box.
 
-This repository contains the application, tests and public page assets. It contains **no attendee records, signup database, credentials, private correspondence or original workspace history**. MIT licensed.
+You will need to host a webpage to use this as designed. I'm happy to host temporarily while you get set up if you don't want to set up infrastructure for yourself.
 
-## Want this for your Bluesky meetup?
+— @proptermalone.bsky.social
 
-If you’d like to use this, I’m happy to set it up and host it for free to get you started. You can move it to your own hosting later if you want—the code is open source, and your event’s data can move with it.
+A meetup page where people sign in with Bluesky, RSVP, and request a button with their profile picture on it. They can also ask to hear about future meetups. Built for a DC happy hour; free to use under the MIT license.
 
-It gives you a meetup page with Bluesky sign-in, private RSVPs, an optional profile-picture button designer, and an opt-in for future meetup updates. No email addresses to collect and no public attendee list.
+## For organizers
 
-**Send me:**
+### What you need
 
-- The event name, date, time and timezone, venue, and a short description.
-- The Bluesky handle of whoever will manage signups.
-- Whether you want the button designer and future-meetup opt-in.
-- Your preferred URL. If you own a domain, you keep control of it; I’ll tell you what DNS records to add.
+- Your event's name, date, hours, timezone, venue, address and a short description.
+- A Bluesky account to manage signups. Attendees use their own Bluesky accounts too.
+- A website address and somewhere to run the app. You can use a domain or subdomain; hosting needs HTTPS, Node.js and persistent disk storage. Static hosting alone won't work. You don't need to run a Bluesky server.
+- Codex, Claude Code, or someone who knows how to run a web app. Give them this repo and your event details. The setup instructions are below.
 
-I’ll handle the technical setup. You check the page before sharing it and handle the event itself, including any button printing. We’ll agree on how long to keep the page and signup data. While I’m hosting, I’ll also hold the private data and backups.
+If you want buttons, you'll also need a printer, press, cutter and matching button parts, or a shop to make them.
 
-Contact [@proptermalone.bsky.social on Bluesky](https://bsky.app/profile/proptermalone.bsky.social) about hosting. Don’t put attendee lists, credentials or other private data in a public GitHub issue. Hosting starts by agreement, not automatically when you clone this repository.
+### Want this for your Bluesky meetup?
 
-Prefer to run it yourself? Start below.
+I can help set it up and host it for free to get you started. You can move it to your own hosting later, including your event's data.
 
-## Quick start
+Contact **@proptermalone.bsky.social** with the event details, the organizer's handle, whether you want buttons and future-meetup updates, and your preferred website address. If you have a domain, you keep it; I'll tell you which DNS records to add.
 
-Requires Node22.16+ and npm. Tested with Node22; its built-in SQLite API is experimental. One server process with private persistent disk; no separate database server required.
+https://bsky.app/profile/proptermalone.bsky.social
+
+You check the page before sharing it and handle the event and printing. We'll agree on how long to keep the data; while I'm hosting, I'll hold the private data and backups. If you self-host, that's your responsibility. Keep attendee data and credentials out of public issues.
+
+## For coding agents: setup and operations
+
+Run one event per instance. Keep its data and credentials separate from other events. Get the owner's approval before deploying, publishing, spending money or contacting anyone. Ask whether they want the free hosting above before setting up a new host.
+
+### Set up
+
+Requires Node.js 22.16+ and npm; tested with Node 22. Run one server process with private persistent disk. It uses Node's built-in SQLite, which is experimental in Node 22; no separate database server is needed.
 
 ```sh
 npm ci
+cp .env.example .env
 npm run validate
 npm run build
 npm run smoke
-cp .env.example .env
 npm start
 ```
 
-Open http://127.0.0.1:3000 . Local OAuth follows the AT Protocol loopback convention. For a real deployment, configure your own HTTPS origin, operator DID and retention deadline as described below. Never copy a production database into a public directory or this repository.
+Open the local page:
 
-## What it does
+http://127.0.0.1:3000
 
-- Sign in with a bare Bluesky username, full handle or custom domain using the official OAuth SDK. Account ownership is verified; attendance remains self-reported.
-- One individual response per DID: Coming, Maybe or Not this time. No party-size field.
-- Optional, separate profile-picture button request, with preview, editable short label, top/bottom text and white/black lettering. Artwork approval is versioned; attendance is not implied by a button request.
-- Independent, default-off future-meetup contact preference. It can be managed without attendance; withdrawing event artwork does not silently unsubscribe the account. No automatic contact is sent.
-- Private operator attendance/button views, future-contact list and print-sheet export. No operator access is granted by default.
-- Editable choices, stale-write protection, explicit deletion and configured artwork expiry. Artwork expiry does not erase attendance/contact preferences; decide their retention separately.
-- Encrypted storage is **not** provided by the app. Protect the host and disk, database, OAuth signing key, backups and exported print sheets.
+### Replace the sample event
 
-## Adapt the example
+This copy still describes the DC event at Sudhouse on November 10, 2026. Change:
 
-This is a working single-event app, not a generic event platform. The sample retains public **DC Bluesky / November10,2026 / Sudhouse** branding so you can see the actual page that inspired it. Before inviting people to your own deployment, replace all sample event facts and links:
+- `public/index.html`: event details, calendar link, social metadata and privacy/retention text.
+- `public/happy-hour.ics`: title, date/time, timezone, location, URL and a new event UID.
+- Social preview SVG/PNG, icons, `site.webmanifest` and CSS. Regenerate images when their sources change.
+- Service names in OAuth metadata and source; deadline formatting needs the event's locale and timezone too. Search for `DC Bluesky`, `dcbsky.com`, `Sudhouse` and `2026`, checking which matches are test fixtures.
+- Tests that assert the sample event details. Keep the privacy and security checks.
 
-1. `public/index.html`: visible text, date/time, venue, address, Google Calendar URL, social metadata, privacy and retention copy.
-2. `public/happy-hour.ics`: event UID, title, timezone-aware date/time, location and URL. Create a new UID for a different event.
-3. `public/social-preview.svg` and `.png`: social card. SVG is editable source; regenerate the PNG after changing it. An installed SVG renderer such as `rsvg-convert` works; it is not needed to run the app.
-4. `public/favicon.svg`, icon PNGs, `site.webmanifest` and CSS: branding. Optional `bluesky-avatar`/`bluesky-banner` sources are account artwork from the example, not runtime features.
-5. `.env`: your origin, private storage directories, **ADMIN_DIDS**, artwork deadline and optional cutoffs/print dimensions. The example deadline is illustrative, not a retention policy chosen for your event. Tests intentionally check sample copy and artwork; update their expectations when customizing.
+Check for existing event-configuration work before adding another way to configure events. Never copy production data, credentials or private workspace history into the public repo.
 
-The app's OAuth metadata, public-profile fetching and labels also contain the sample service name; search the source for `DC Bluesky`, `dcbsky.com`, `Sudhouse` and `2026` when adapting it. Domain strings in tests are fixtures, not deployment configuration. Do not send attendees to the sample event accidentally.
+### Configure and launch
 
-## Configuration and HTTPS
+See `.env.example` for settings. Never commit `.env`.
 
-`.env.example` lists supported environment settings. Keep actual `.env` files out of source control.
+| Setting | What to set |
+| --- | --- |
+| `APP_ORIGIN` | Public HTTPS origin, without a path or trailing slash. Loopback HTTP is for local use. |
+| `ADMIN_DIDS` | Organizer DIDs, comma-separated. Blank gives nobody admin access. Authorization uses verified DIDs, not handles supplied by a browser. |
+| `DATA_DIR` | Private persistent directory. Keep `app.sqlite` and `oauth-key.json` across restarts. |
+| `ARTWORK_DELETE_AT` | Artwork deletion deadline with an explicit timezone. Required for HTTPS and backups; match the page's privacy text. |
+| `RESPONSE_CUTOFF`, `BUTTON_CUTOFF` | Optional deadlines for new responses and button requests. People must still be able to withdraw, delete or change contact preferences afterward. |
+| `PRINT_FACE_DIAMETER_MM`, `PRINT_CUT_DIAMETER_MM` | Button face and paper-cut diameters. Face defaults to 58 mm; set the cut size explicitly and test at 100% scale against the actual equipment. |
 
-- `APP_ORIGIN`: exact public origin without trailing slash/path. Local default is `http://127.0.0.1:3000`; production requires HTTPS. The server listens only on loopback.
-- `ADMIN_DIDS`: comma-separated verified account DIDs allowed into operator APIs. Blank means nobody has operator access. Configure your own DID; no original organizer identity is privileged in this export. Handles can change; authorization uses the verified DID, never a browser-provided identity.
-- `DATA_DIR`: private persistent directory; defaults to ignored `.data/`. One process only. Keep `app.sqlite` and `oauth-key.json` stable across restarts.
-- `ARTWORK_DELETE_AT`: required for HTTPS and backups; ISO timestamp with explicit timezone. Choose it deliberately and make the public copy match. `RESPONSE_CUTOFF` and `BUTTON_CUTOFF` are optional. Withdrawal, deletion and contact-preference management remain available after cutoffs.
-- `PRINT_FACE_DIAMETER_MM`: provisional visible circle, default58mm. `PRINT_CUT_DIAMETER_MM` must be explicitly configured for print export; test the actual cutter/press at100% scale. There is no promise that58mm is the paper-cut diameter.
+Use an HTTPS reverse proxy in front of the loopback Node listener. Workers/Pages-only hosting won't run this app. Keep `/client-metadata.json`, `/jwks.json` and `/oauth/callback` publicly reachable.
 
-Use a Node-capable host with durable disk and an HTTPS reverse proxy. This is not a Cloudflare Workers/Pages-only deployment. Preserve public reachability of `/client-metadata.json`, `/jwks.json` and `/oauth/callback`. Do a real provider authorization round trip before collecting responses; unit tests and HTTP smoke do not establish that.
+With a Cloudflare tunnel, enable `TRUST_CLOUDFLARE_TUNNEL=true` only when a trusted loopback proxy sets `x-dcbsky-proxy-secret` to `CLOUDFLARE_ORIGIN_SECRET` and strips untrusted forwarding headers. Don't expose the Node port. Without that setup, rate limits use socket peers, so a proxy may group visitors together.
 
-When using a Cloudflare tunnel, the app can trust `CF-Connecting-IP` only if explicitly enabled with `TRUST_CLOUDFLARE_TUNNEL=true` and a private `CLOUDFLARE_ORIGIN_SECRET`. A loopback proxy must overwrite/inject `x-dcbsky-proxy-secret` and strip untrusted forwarding headers. Do not expose the Node port directly or enable header trust merely because Cloudflare is in front. The default socket-peer rate limits may group all proxied visitors otherwise. Deployment configuration and DNS credentials are intentionally not included.
+Before inviting people, check the final page and complete a real Bluesky login, save/reload, admin-access check and withdrawal/deletion test. Test a printout too. The repo doesn't install services, DNS records or timers.
 
-You do **not** need to host a PDS to run this app. Users can sign in from their existing interoperable provider. Creating a community bot or moving an account to a self-hosted PDS is separate.
+### Run the event
 
-## Security and known dependency risk
+- Use the private organizer view for responses, button artwork and future-meetup contacts. One RSVP represents one account, not a party or confirmed arrival.
+- Keep new and existing RSVPs private until the attendee chooses an audience. The attendee list includes Coming and Maybe responses only, filtered on the server for the signed-in viewer. Never return hidden records to the browser. Follow checks use Bluesky's public graph; failures or request limits hide affected entries and show an incomplete-results notice. The current request budget checks up to 200 relationship-restricted attendees without caching access across requests.
+- The sharing link opens Bluesky's editable composer for a saved Coming response. The attendee chooses whether to publish; changing an RSVP never posts automatically. A public post is separate from attendance visibility on this page.
+- Print the saved, approved picture and design. Preserve the label, position, color and renderer version; don't substitute a newer avatar or redesign old requests without approval.
+- Re-export just before printing to pick up changes and withdrawals. Omit declined responses and unapproved artwork. Protect downloaded files and physical sheets.
+- Keep future-meetup consent separate from attendance and artwork. It defaults off and survives artwork expiry. A contact list doesn't authorize automatic outreach.
+- Don't add bulk DM reminders. Permission to open a chat doesn't guarantee the service will allow a batch of messages.
+- Agree on backups, failure monitoring and restart/update procedures with the owner. Don't install extra polling or scheduled jobs without approval.
 
-This is a small application, not an independently certified security product. It stores personal attendance and contact preferences even though a DID itself is public. Obtain appropriate consent, restrict operator access and define retention before collecting data.
+### Backups and deletion
 
-Server-side OAuth tokens are discarded after identity establishment. Random browser sessions are hashed at rest; HttpOnly/SameSite cookies, Origin+CSRF checks, one-use OAuth browser binding, request limits, safe DOM text output and private operator authorization protect application boundaries. Avatar fetches are restricted to validated raster images on fixed Bluesky CDN hosts. SDK identity/auth networking uses the official SSRF guard and additional bounds.
-
-**The production dependency audit is not clean.** The release preparation audit reports15high-severity dependency-chain entries from Zod advisory `GHSA-mrhx-c7xc-m3w5` through the official OAuth SDK. These are dependency entries, not15independent application flaws. No unsupported forced major-version override was applied. Re-run `npm audit --omit=dev` and check compatible vendor fixes before deploying.
-
-Application safeguards cap decoded SDK responses at128KiB, enforce a10second deadline and JSON complexity budgets, and allow at most four concurrent authorization/callback operations without an unbounded queue. They reduce exposure; they do **not** patch Zod or establish comprehensive denial-of-service resistance. Legitimate complex provider documents may be rejected. Review this residual risk for your deployment rather than treating the passing tests as a clean audit.
-
-## Backups and deletion
-
-Build first, then run with your configured environment:
+Build first, then run:
 
 ```sh
 npm run backup
 ```
 
-The command creates a consistent SQLite online backup plus the unchanged OAuth key in `BACKUP_DIR` (ignored `.backups/` by default). It fails if no existing database/key is present. **These snapshots are not encrypted.** Use private/encrypted storage and independent off-host protection as appropriate; test restoration to a separate private directory before relying on it.
+This copies the existing SQLite database and OAuth key into `BACKUP_DIR` (default `.backups/`). The app does **not** encrypt its storage or backups. Restrict access and arrange encrypted off-host storage as needed.
 
-The command caps snapshots at seven and expires them after seven days. At/after the artwork deadline, pre-deadline snapshots are removed; newer snapshots retain attendance/contact data without artwork. Each backup also runs expiry cleanup and compacts its database copy. Schedule a serialized daily backup **and a run at the artwork deadline**, even if the web app stops, and monitor failures. This repository installs no timer or hosting service.
+Schedule serialized daily backups and a run at the artwork deadline, even if the app is stopped. Monitor failures. The command keeps up to seven snapshots for seven days; at artwork expiry it removes older snapshots and scrubs artwork from new ones. The running app also expires artwork, but stopping it can delay cleanup until a request, restart or backup.
 
-The app scrubs artwork while running; stopping it delays cleanup until restart/request/backup. Downloads, browser folders, print queues, physical prints and host snapshots are outside the app's control. You must apply the same artwork deadline to those copies. Deletion is not a claim of forensic secure erasure.
+Remove artwork from downloads, print queues, physical sheets and other snapshots by the same deadline. Choose retention for attendance and contact preferences separately; artwork expiry doesn't delete them. Don't promise forensic erasure.
 
-Restore while the app is stopped into a new private directory, with matching policy/origin and both database and key. Never overlay a running database or mix old WAL/SHM files. After the artwork deadline, restore only sanitized post-deadline backups. Verify operator authorization, private records and a real OAuth login before reopening collection.
+Test a restore into a separate private directory with the matching origin/policy and both database and key. Don't overwrite a running database or mix in old WAL/SHM files. After expiry, restore only backups already scrubbed of artwork. Check access, records and a real login before reopening signups.
 
-## Development checks
+### Checks and known risk
 
 ```sh
 npm run validate
@@ -113,6 +119,6 @@ npm run smoke
 npm audit --omit=dev
 ```
 
-Validation includes Biome, strict TypeScript, Vitest/happy-dom, selected core business-logic coverage gates, Knip and ts-prune. Socket/database workflows use real local resources; third-party OAuth/profile networking is an unmanaged boundary. Coverage numbers are not whole-app security coverage. The audit is separate and currently nonzero as disclosed above.
+Validation runs formatting/lint, TypeScript, tests with selected coverage gates, and dead-code checks. Smoke tests don't establish that live OAuth works. Treat attendance and contact choices as personal data, even though account DIDs are public.
 
-No hosted support, moderation service, email list, payments, recurring-event platform, automatic messaging or migration service is included.
+The release-preparation audit reported 15 high-severity dependency-chain entries for Zod advisory `GHSA-mrhx-c7xc-m3w5` through the official OAuth SDK. Re-run the audit and check for supported fixes before deployment; that old result isn't a current audit. Network/time/complexity limits reduce exposure but don't patch the dependency. Don't force unsupported major-version overrides or treat passing tests as a clean security audit.

@@ -13,9 +13,12 @@ import {
 } from "../shared/button.js";
 import { loginHandle } from "../shared/handle.js";
 import type { ClientState } from "../shared/types.js";
+import { isVisibility } from "../shared/visibility.js";
+import { attendanceDirectory, type RelationshipLookup } from "./directory.js";
 import type { OAuthBoundary } from "./oauth.js";
 import { parseResponse } from "./policy.js";
 import { printSheet } from "./print.js";
+import { publicRelationshipBatch } from "./relationships.js";
 import {
 	artworkSource,
 	proxyFromEnvironment,
@@ -33,6 +36,7 @@ export interface AppConfig {
 	printCutDiameter?: number | null;
 	publicDirectory: string;
 	trustedProxy?: TrustedProxy;
+	relationshipLookup?: RelationshipLookup;
 }
 function cookie(req: IncomingMessage, name: string): string {
 	return (
@@ -69,6 +73,8 @@ async function jsonBody(req: IncomingMessage): Promise<unknown> {
 }
 export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 	const environmentProxy = proxyFromEnvironment();
+	const lookup = config.relationshipLookup;
+	const batchLookup = lookup ? undefined : publicRelationshipBatch();
 	const limits = new Map<string, { count: number; expires: number }>();
 	function rate(identity: string, lane: string, maximum: number) {
 		const now = Date.now();
@@ -171,9 +177,39 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 					throw new RequestError(400, "Sign-in could not be completed. Start sign-in again.");
 				}
 			}
+			if (url.pathname === "/api/directory" && method === "GET") {
+				res.setHeader("Cache-Control", "private, no-store");
+				if (session) rate(session.csrf, "directory", 30);
+				const snapshot = db.list();
+				const versions = new Map(snapshot.map((row) => [row.did, db.version(row.did)]));
+				const directory = await attendanceDirectory(
+					snapshot,
+					session?.profile.did ?? null,
+					lookup,
+					batchLookup,
+				);
+				const currentSession = session ? db.session(token, Date.now()) : null;
+				const viewerDid = currentSession?.profile.did ?? null;
+				const currentRows = new Map(db.list().map((row) => [row.did, row]));
+				directory.entries = directory.entries.filter((entry) => {
+					const before = snapshot.find((row) => row.did === entry.did);
+					const current = currentRows.get(entry.did);
+					if (!before || !current || db.version(entry.did) !== versions.get(entry.did))
+						return false;
+					if (current.attendance !== before.attendance || current.visibility !== before.visibility)
+						return false;
+					if (before.did === session?.profile.did) return viewerDid === before.did;
+					if (before.visibility === "public") return true;
+					return (
+						!!viewerDid && (before.visibility === "loggedin" || viewerDid === session?.profile.did)
+					);
+				});
+				return send(200, directory);
+			}
 			if (url.pathname === "/api/me" && method === "GET") {
 				const response = session ? db.get(session.profile.did) : null;
 				const state: ClientState = {
+					share: { url: `${config.origin}/` },
 					profile: session?.profile ?? null,
 					csrf: session?.csrf ?? "",
 					response,
@@ -269,6 +305,22 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 					)
 						throw new RequestError(400, "Expected response version");
 					if (!db.cancel(session.profile.did, body.expectedVersion, url.pathname === "/api/signup"))
+						throw conflict();
+					return send(200, { ok: true });
+				}
+				if (url.pathname === "/api/visibility" && method === "PUT") {
+					const body = await jsonBody(req);
+					if (!body || typeof body !== "object" || Array.isArray(body))
+						throw new RequestError(400, "Invalid visibility fields");
+					const fields = body as Record<string, unknown>;
+					if (
+						Object.keys(fields).some((key) => !["visibility", "expectedVersion"].includes(key)) ||
+						!isVisibility(fields.visibility) ||
+						typeof fields.expectedVersion !== "string" ||
+						fields.expectedVersion.length > 64
+					)
+						throw new RequestError(400, "Invalid visibility fields");
+					if (!db.setVisibility(session.profile.did, fields.visibility, fields.expectedVersion))
 						throw conflict();
 					return send(200, { ok: true });
 				}

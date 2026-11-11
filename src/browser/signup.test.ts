@@ -46,8 +46,11 @@ it.each([
 	field.dispatchEvent(new Event("blur"));
 	expect(field.value).toBe(input);
 	document.getElementById("login")?.dispatchEvent(new Event("submit", { cancelable: true }));
-	await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
-	expect(JSON.parse(fetcher.mock.calls[1]?.[1]?.body as string)).toEqual({ handle: expected });
+	await vi.waitFor(() =>
+		expect(fetcher.mock.calls.some(([path]) => path === "/oauth/login")).toBe(true),
+	);
+	const loginCall = fetcher.mock.calls.find(([path]) => path === "/oauth/login");
+	expect(JSON.parse(loginCall?.[1]?.body as string)).toEqual({ handle: expected });
 });
 it("shows a suffix suggestion without a request or silent rewrite", async () => {
 	const state = empty();
@@ -62,8 +65,35 @@ it("shows a suffix suggestion without a request or silent rewrite", async () => 
 			"Did you mean alice.bsky.social?",
 		),
 	);
-	expect(fetcher).toHaveBeenCalledTimes(1);
+	expect(fetcher).toHaveBeenCalledTimes(2);
 	expect(field.value).toBe("alice.bluesky.social");
+});
+it("defaults visibility to private and shares only persisted Coming, never a draft", async () => {
+	const state = empty();
+	await page(state);
+	expect((document.getElementById("visibility") as HTMLSelectElement).value).toBe("private");
+	const share = document.getElementById("share-attendance") as HTMLAnchorElement;
+	expect(share.hidden).toBe(true);
+	(document.querySelector('input[value="coming"]') as HTMLInputElement).checked = true;
+	document.getElementById("response")?.dispatchEvent(new Event("change"));
+	expect(share.hidden).toBe(true);
+	state.response = {
+		did: state.profile!.did,
+		handle: state.profile!.handle,
+		attendance: "coming",
+		visibility: "mutuals",
+		artwork: null,
+		updatedAt: 1,
+	};
+	vi.resetModules();
+	await page(state);
+	expect((document.getElementById("visibility") as HTMLSelectElement).value).toBe("mutuals");
+	expect(share.hidden).toBe(true); // Detached prior page remains unchanged.
+	const savedLink = document.getElementById("share-attendance") as HTMLAnchorElement;
+	expect(savedLink.hidden).toBe(false);
+	expect(new URL(savedLink.href).origin).toBe("https://bsky.app");
+	expect(new URL(savedLink.href).pathname).toBe("/intent/compose");
+	expect(new URL(savedLink.href).searchParams.get("text")).toContain("I’m coming");
 });
 it("does not call a login-only account signed up", async () => {
 	await page(empty());

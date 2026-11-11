@@ -47,6 +47,102 @@ it("renders signed-out event copy without collecting a response or showing opera
 	expect(document.body.textContent).not.toContain("not selected");
 	expect(document.body.textContent).not.toContain("Local implementation draft");
 });
+it("does not render an authenticated directory response after logout and anonymous reload", async () => {
+	await page();
+	let finishDirectory!: (response: Response) => void;
+	let directoryCalls = 0;
+	const privateEntry = { did: "did:plc:private", handle: "private.test", attendance: "coming" };
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async (path: string) => {
+			if (path === "/api/directory" && directoryCalls++ === 0)
+				return await new Promise<Response>((resolve) => {
+					finishDirectory = resolve;
+				});
+			if (path === "/api/directory")
+				return new Response(JSON.stringify({ entries: [], incomplete: false }));
+			if (path === "/api/logout") return new Response("{}");
+			return new Response(
+				JSON.stringify({
+					profile:
+						path === "/api/me" && directoryCalls < 2
+							? { did: "did:plc:user", handle: "user.test", avatar: null }
+							: null,
+					csrf: "token",
+					response: null,
+					admin: false,
+					policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+				}),
+			);
+		}),
+	);
+	await import("./main.js");
+	await vi.waitFor(() => expect(finishDirectory).toBeTypeOf("function"));
+	(document.getElementById("logout") as HTMLButtonElement).click();
+	expect(document.getElementById("signed-in")?.hidden).toBe(true);
+	await vi.waitFor(() => expect(document.getElementById("signed-out")?.hidden).toBe(false));
+	finishDirectory(new Response(JSON.stringify({ entries: [privateEntry], incomplete: false })));
+	await Promise.resolve();
+	expect(document.getElementById("directory")?.textContent).not.toContain("private.test");
+});
+it.each([
+	"response",
+	"save-visibility",
+	"cancel",
+])("does not let pending %s completion supersede logout", async (action) => {
+	await page();
+	let finishMutation!: (response: Response) => void;
+	let finishLogout!: (response: Response) => void;
+	let meCalls = 0;
+	let authenticated = true;
+	vi.stubGlobal("confirm", () => true);
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async (path: string, options?: RequestInit) => {
+			if (path === "/api/logout")
+				return new Promise<Response>((resolve) => {
+					finishLogout = resolve;
+				});
+			if (options?.method && options.method !== "GET")
+				return new Promise<Response>((resolve) => {
+					finishMutation = resolve;
+				});
+			if (path === "/api/directory")
+				return new Response(JSON.stringify({ entries: [], incomplete: false }));
+			meCalls++;
+			return new Response(
+				JSON.stringify({
+					profile: authenticated
+						? { did: "did:plc:user", handle: "user.test", avatar: null }
+						: null,
+					csrf: "token",
+					response: null,
+					responseVersion: "0",
+					futureMeetups: false,
+					preview: { profile: "", saved: null },
+					admin: false,
+					policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+				}),
+			);
+		}),
+	);
+	await import("./main.js");
+	await vi.waitFor(() => expect(document.getElementById("signed-in")?.hidden).toBe(false));
+	if (action === "response")
+		document.getElementById(action)?.dispatchEvent(new Event("submit", { cancelable: true }));
+	else document.getElementById(action)?.dispatchEvent(new Event("click"));
+	await vi.waitFor(() => expect(finishMutation).toBeTypeOf("function"));
+	(document.getElementById("logout") as HTMLButtonElement).click();
+	await vi.waitFor(() => expect(finishLogout).toBeTypeOf("function"));
+	finishMutation(new Response("{}"));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(meCalls).toBe(1);
+	authenticated = false;
+	finishLogout(new Response("{}"));
+	await vi.waitFor(() => expect(meCalls).toBe(2));
+	expect(document.getElementById("signed-in")?.hidden).toBe(true);
+});
+
 it("previews saved consent snapshot, permits PFP-only, and decline unchecks button opt-in", async () => {
 	await page();
 	const state: ClientState = {

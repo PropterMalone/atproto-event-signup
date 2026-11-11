@@ -10,6 +10,12 @@ import type {
 	Session,
 } from "../shared/types.js";
 
+import { type AttendanceVisibility, storedVisibility } from "../shared/visibility.js";
+
+const normalizeResponse = (value: string): SavedResponse => {
+	const row = JSON.parse(value) as SavedResponse;
+	return { ...row, visibility: storedVisibility(row.visibility) };
+};
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 export class Store {
 	private db: DatabaseSync;
@@ -27,13 +33,13 @@ export class Store {
 	}
 	get(did: string): SavedResponse | null {
 		const row = this.db.prepare("SELECT value FROM responses WHERE did=?").get(did);
-		return row ? (JSON.parse(String(row.value)) as SavedResponse) : null;
+		return row ? normalizeResponse(String(row.value)) : null;
 	}
 	list(): SavedResponse[] {
 		return this.db
 			.prepare("SELECT value FROM responses ORDER BY did")
 			.all()
-			.map((row) => JSON.parse(String(row.value)) as SavedResponse);
+			.map((row) => normalizeResponse(String(row.value)));
 	}
 	eligible(): SavedResponse[] {
 		return this.list().filter((row) => row.artwork !== null);
@@ -66,6 +72,18 @@ export class Store {
 		} else {
 			this.db.prepare("DELETE FROM future_contacts WHERE did=?").run(profile.did);
 		}
+	}
+	setVisibility(did: string, visibility: AttendanceVisibility, expected: string): boolean {
+		return (
+			this.write(did, expected, () => {
+				const old = this.get(did);
+				if (!old) return false;
+				this.db
+					.prepare("UPDATE responses SET value=? WHERE did=?")
+					.run(JSON.stringify({ ...old, visibility }), did);
+				return true;
+			}) === true
+		);
 	}
 	setPreference(profile: Profile, enabled: boolean, now: number, expected: string): boolean {
 		return (
@@ -167,6 +185,7 @@ export class Store {
 				did: profile.did,
 				handle: profile.handle,
 				attendance: input.attendance,
+				visibility: input.visibility ?? old?.visibility ?? "private",
 				artwork,
 				updatedAt: now,
 			};
