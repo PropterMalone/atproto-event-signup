@@ -9,18 +9,27 @@ import {
 import type { Profile } from "../shared/types.js";
 import { avatarSnapshot, boundedBytes, createSdkFetch, safeFetch } from "./network.js";
 import { safeHandle } from "./policy.js";
+import {
+	type PublicationResult,
+	type PublicRsvp,
+	RSVP_COLLECTION,
+	RSVP_SCOPE,
+} from "./publication.js";
 import type { Store } from "./store.js";
 export interface OAuthBoundary {
 	metadata: unknown;
 	jwks: unknown;
-	authorize(handle: string, binding: string): Promise<URL>;
+	authorize(handle: string, binding: string, publicAttendance?: boolean): Promise<URL>;
+	rsvp?(did: string, rkey: string, record: PublicRsvp | null): Promise<PublicationResult>;
 	complete(params: URLSearchParams): Promise<{ profile: Profile; binding: string | null }>;
 }
 export async function createOAuth(
 	origin: string,
 	directory: string,
 	db: Store,
+	publicAttendance = false,
 ): Promise<OAuthBoundary> {
+	const availableScope = publicAttendance ? `atproto ${RSVP_SCOPE}` : "atproto";
 	const local = origin.startsWith("http:");
 	const path = join(directory, "oauth-key.json");
 	let key: JoseKey;
@@ -32,10 +41,20 @@ export async function createOAuth(
 		await writeFile(path, JSON.stringify(key.privateJwk), { flag: "wx", mode: 0o600 });
 	}
 	const redirect = `${origin}/oauth/callback`;
+	const sdkLocks = new Set<string>();
 	const client = new NodeOAuthClient({
+		requestLock: async (name, action) => {
+			if (sdkLocks.has(name)) throw new Error("OAuth session is busy; retry shortly");
+			sdkLocks.add(name);
+			try {
+				return await action();
+			} finally {
+				sdkLocks.delete(name);
+			}
+		},
 		clientMetadata: {
 			client_id: local
-				? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=atproto`
+				? `http://localhost?redirect_uri=${encodeURIComponent(redirect)}&scope=${encodeURIComponent(availableScope)}`
 				: `${origin}/client-metadata.json`,
 			client_name: "DC Bluesky happy hour",
 			...(local ? {} : { client_uri: origin }),
@@ -43,7 +62,7 @@ export async function createOAuth(
 			grant_types: ["authorization_code", "refresh_token"],
 			response_types: ["code"],
 			redirect_uris: [redirect],
-			scope: "atproto",
+			scope: availableScope,
 			dpop_bound_access_tokens: true,
 			...(local
 				? { token_endpoint_auth_method: "none" as const }
@@ -56,7 +75,7 @@ export async function createOAuth(
 		...(local ? {} : { keyset: [key] }),
 		fetch: createSdkFetch(),
 		stateStore: db.oauthStore<NodeSavedState>("state", 600000),
-		sessionStore: db.oauthStore<NodeSavedSession>("tokens", 600000),
+		sessionStore: db.oauthStore<NodeSavedSession>("tokens", 86400000),
 	});
 	const publicKey = key.publicJwk as Record<string, unknown> | undefined;
 	if (!publicKey) throw new Error("Missing OAuth public key");
@@ -79,10 +98,102 @@ export async function createOAuth(
 	return {
 		metadata: client.clientMetadata,
 		jwks: { keys: [jwk] },
-		authorize: (handle, binding) =>
+		rsvp: async (did, rkey, record) => {
+			try {
+				if (!(await db.oauthStore<NodeSavedSession>("tokens", 86400000).get(did)))
+					return { ok: false, reason: "reauthorize" };
+				const version = db.version(did);
+				const session = await client.restore(did);
+				const info = await session.getTokenInfo();
+				if (session.did !== did || !info.scope.split(" ").includes(RSVP_SCOPE))
+					return { ok: false, reason: "reauthorize" };
+				const owned = db.publication(did);
+				if (!owned || owned.rkey !== rkey) return { ok: false, reason: "conflict" };
+				const query = new URLSearchParams({ repo: did, collection: RSVP_COLLECTION, rkey });
+				const existing = await session.fetchHandler(`/xrpc/com.atproto.repo.getRecord?${query}`, {
+					signal: AbortSignal.timeout(8000),
+				});
+				let cid: string | null = null;
+				if (existing.ok) {
+					const bytes = await boundedBytes(existing, 8192);
+					if (!bytes) return { ok: false, reason: "uncertain" };
+					const value = JSON.parse(Buffer.from(bytes).toString("utf8")) as {
+						cid?: unknown;
+						value?: unknown;
+					};
+					const matches = owned.records.some((known) => {
+						const actual = value.value as PublicRsvp | undefined;
+						return (
+							actual &&
+							typeof actual === "object" &&
+							!Array.isArray(actual) &&
+							Object.keys(actual).length === 3 &&
+							actual.subject &&
+							typeof actual.subject === "object" &&
+							!Array.isArray(actual.subject) &&
+							Object.keys(actual.subject).length === 2 &&
+							Object.hasOwn(actual.subject, "uri") &&
+							Object.hasOwn(actual.subject, "cid") &&
+							actual.$type === known.$type &&
+							actual.status === known.status &&
+							actual.subject?.uri === known.subject.uri &&
+							actual.subject?.cid === known.subject.cid
+						);
+					});
+					if (!matches || typeof value.cid !== "string") return { ok: false, reason: "conflict" };
+					cid = value.cid;
+				} else {
+					const bytes = await boundedBytes(
+						new Response(existing.body, { headers: existing.headers }),
+						4096,
+					);
+					const error = bytes
+						? (JSON.parse(Buffer.from(bytes).toString("utf8")) as { error?: string })
+						: null;
+					if (error?.error !== "RecordNotFound")
+						return { ok: false, reason: existing.status === 401 ? "reauthorize" : "uncertain" };
+				}
+				if (db.version(did) !== version) return { ok: false, reason: "conflict" };
+				if (!record && !cid)
+					return owned.unresolvedPut ? { ok: false, reason: "uncertain" } : { ok: true };
+				const alreadyUnresolved = !!owned.unresolvedPut;
+				if (record) {
+					// Persist before dispatch: aborting the client request cannot cancel a PDS commit.
+					owned.unresolvedPut = true;
+					db.setPublication(did, owned);
+				}
+				const result = await session.fetchHandler(
+					`/xrpc/com.atproto.repo.${record ? "putRecord" : "deleteRecord"}`,
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						signal: AbortSignal.timeout(8000),
+						body: JSON.stringify({
+							repo: did,
+							collection: RSVP_COLLECTION,
+							rkey,
+							...(record ? { record, validate: false, swapRecord: cid } : { swapRecord: cid }),
+						}),
+					},
+				);
+				if (result.ok && record && !alreadyUnresolved) {
+					owned.unresolvedPut = false;
+					db.setPublication(did, owned);
+				}
+				return result.ok
+					? { ok: true }
+					: {
+							ok: false,
+							reason: result.status === 401 || result.status === 403 ? "reauthorize" : "uncertain",
+						};
+			} catch {
+				return { ok: false, reason: "uncertain" };
+			}
+		},
+		authorize: (handle, binding, requested = false) =>
 			limited(() =>
 				client.authorize(handle, {
-					scope: "atproto",
+					scope: requested && publicAttendance ? availableScope : "atproto",
 					state: binding,
 					signal: AbortSignal.timeout(15000),
 				}),
@@ -122,8 +233,10 @@ export async function createOAuth(
 				} catch {
 					/* An unavailable PFP must not prevent attendance responses. */
 				}
-				// No ongoing API access is needed; discard local access/refresh credentials immediately.
-				await db.oauthStore<NodeSavedSession>("tokens", 600000).del(session.did);
+				// Only explicitly granted RSVP sessions need credentials after identity verification.
+				const info = await session.getTokenInfo();
+				if (!publicAttendance || !info.scope.split(" ").includes(RSVP_SCOPE))
+					await db.oauthStore<NodeSavedSession>("tokens", 86400000).del(session.did);
 				return { profile: { did: session.did, handle, avatar }, binding: state };
 			}),
 	};

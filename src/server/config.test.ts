@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { readAdminDids, readPolicyConfig } from "./config.js";
+import { readAdminDids, readPolicyConfig, readPublicEvent } from "./config.js";
+
+it("disables protocol publication by default and validates the complete public event strong reference", () => {
+	expect(readPublicEvent({})).toBeNull();
+	const uri =
+		"at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/community.lexicon.calendar.event/3mabc23456722";
+	const cid = "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+	expect(readPublicEvent({ PUBLIC_EVENT_URI: uri, PUBLIC_EVENT_CID: cid })).toEqual({ uri, cid });
+	for (const env of [
+		{ PUBLIC_EVENT_URI: uri },
+		{ PUBLIC_EVENT_CID: cid },
+		{ PUBLIC_EVENT_URI: uri.replace("calendar.event", "calendar.rsvp"), PUBLIC_EVENT_CID: cid },
+		{ PUBLIC_EVENT_URI: uri, PUBLIC_EVENT_CID: "not-a-cid" },
+		{ PUBLIC_EVENT_URI: `${uri}?x=1`, PUBLIC_EVENT_CID: cid },
+	])
+		expect(() => readPublicEvent(env)).toThrow("PUBLIC_EVENT");
+});
 
 const deletion = "2026-11-24T23:59:59-05:00";
 const admin = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";

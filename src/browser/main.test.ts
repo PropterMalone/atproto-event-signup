@@ -15,6 +15,36 @@ async function page() {
 const tick = async () => {
 	await vi.waitFor(() => expect(document.getElementById("status")?.textContent).toBe(""));
 };
+it("keeps remote withdrawal uncertainty visible after local deletion and never retries on load", async () => {
+	await page();
+	const fetcher = vi.fn(async (path: string) =>
+		Response.json(
+			path === "/api/directory"
+				? { entries: [], incomplete: false }
+				: {
+						profile: { did: "did:plc:attendee", handle: "attendee.test", avatar: null },
+						csrf: "token",
+						response: null,
+						responseVersion: "v1",
+						publicAttendance: true,
+						publication: { status: "uncertain" },
+						futureMeetups: false,
+						preview: { profile: "", saved: null },
+						admin: false,
+						policy: { responseCutoff: null, buttonCutoff: null, artworkDeleteAt: null },
+					},
+		),
+	);
+	vi.stubGlobal("fetch", fetcher);
+	await import("./main.js");
+	await tick();
+	expect(document.getElementById("publication-status")?.textContent).toContain("NOT confirmed");
+	expect(document.getElementById("retry-publication")?.hidden).toBe(false);
+	expect(document.getElementById("authorize-publication")?.hidden).toBe(false);
+	expect(
+		fetcher.mock.calls.every(([path]) => path === "/api/me" || path === "/api/directory"),
+	).toBe(true);
+});
 it("renders signed-out event copy without collecting a response or showing operator data", async () => {
 	await page();
 	vi.stubGlobal(
@@ -89,6 +119,7 @@ it.each([
 	"response",
 	"save-visibility",
 	"cancel",
+	"retry-publication",
 ])("does not let pending %s completion supersede logout", async (action) => {
 	await page();
 	let finishMutation!: (response: Response) => void;

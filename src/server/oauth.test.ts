@@ -4,12 +4,129 @@ import { join } from "node:path";
 import { NodeOAuthClient, OAuthResolverError } from "@atproto/oauth-client-node";
 import { afterEach, expect, it, vi } from "vitest";
 import { createOAuth } from "./oauth.js";
+import { publicRsvp, RSVP_SCOPE } from "./publication.js";
 import { Store } from "./store.js";
 
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => {
 	vi.restoreAllMocks();
 	for (const run of cleanup.splice(0)) await run();
+});
+it("requests narrow scope only explicitly and safely uses SDK sessions for owned compare-and-swap writes", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "rsvp-sdk-"));
+	const db = new Store(join(dir, "test.sqlite"));
+	cleanup.push(async () => {
+		db.close();
+		await rm(dir, { recursive: true });
+	});
+	const oauth = await createOAuth("http://127.0.0.1:3000", dir, db, true);
+	const authorize = vi
+		.spyOn(NodeOAuthClient.prototype, "authorize")
+		.mockResolvedValue(new URL("https://auth.test"));
+	await oauth.authorize("alice.test", "binding");
+	expect(authorize).toHaveBeenLastCalledWith(
+		"alice.test",
+		expect.objectContaining({ scope: "atproto" }),
+	);
+	await oauth.authorize("alice.test", "binding", true);
+	expect(authorize).toHaveBeenLastCalledWith(
+		"alice.test",
+		expect.objectContaining({ scope: `atproto ${RSVP_SCOPE}` }),
+	);
+	const did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+	const event = {
+		uri: `at://${did}/community.lexicon.calendar.event/3mabc23456722`,
+		cid: "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	};
+	const record = publicRsvp(event, "coming");
+	db.setPublication(did, { rkey: "3mabc23456722", event, status: "uncertain", records: [record] });
+	const fetchHandler = vi
+		.fn()
+		.mockResolvedValueOnce(Response.json({ error: "RecordNotFound" }, { status: 400 }))
+		.mockResolvedValueOnce(Response.json({ uri: "at://record" }));
+	const restore = vi.spyOn(NodeOAuthClient.prototype, "restore").mockResolvedValue({
+		did,
+		getTokenInfo: async () => ({ scope: `atproto ${RSVP_SCOPE}` }),
+		fetchHandler,
+	} as never);
+	expect(await oauth.rsvp?.(did, "3mabc23456722", record)).toEqual({
+		ok: false,
+		reason: "reauthorize",
+	});
+	await db.oauthStore("tokens", 86400000).set(did, {});
+	expect(await oauth.rsvp?.(did, "3mabc23456722", record)).toEqual({ ok: true });
+	expect(JSON.parse(fetchHandler.mock.calls[1]?.[1].body)).toEqual({
+		repo: did,
+		collection: "community.lexicon.calendar.rsvp",
+		rkey: "3mabc23456722",
+		record,
+		validate: false,
+		swapRecord: null,
+	});
+	fetchHandler
+		.mockReset()
+		.mockResolvedValueOnce(
+			Response.json({ cid: "othercid", value: { ...record, status: "someone-elses-status" } }),
+		);
+	expect(await oauth.rsvp?.(did, "3mabc23456722", null)).toEqual({ ok: false, reason: "conflict" });
+	expect(fetchHandler).toHaveBeenCalledTimes(1);
+	fetchHandler
+		.mockReset()
+		.mockResolvedValueOnce(Response.json({ cid: "ownedcid", value: record }))
+		.mockResolvedValueOnce(Response.json({}));
+	expect(await oauth.rsvp?.(did, "3mabc23456722", null)).toEqual({ ok: true });
+	expect(JSON.parse(fetchHandler.mock.calls[1]?.[1].body)).toMatchObject({
+		repo: did,
+		swapRecord: "ownedcid",
+	});
+	fetchHandler.mockReset().mockImplementationOnce(async () => {
+		db.cancel(did, "0");
+		return Response.json({ cid: "ownedcid", value: record });
+	});
+	expect(await oauth.rsvp?.(did, "3mabc23456722", record)).toEqual({
+		ok: false,
+		reason: "conflict",
+	});
+	expect(fetchHandler).toHaveBeenCalledTimes(1);
+	expect(restore).toHaveBeenCalledWith(did);
+});
+it.each([
+	"extra",
+	"array",
+	"null",
+] as const)("does not mutate foreign RSVP content with a %s subject", async (kind) => {
+	const dir = await mkdtemp(join(tmpdir(), "rsvp-subject-"));
+	const db = new Store(join(dir, "test.sqlite"));
+	cleanup.push(async () => {
+		db.close();
+		await rm(dir, { recursive: true });
+	});
+	const did = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
+	const event = {
+		uri: `at://${did}/community.lexicon.calendar.event/3mabc23456722`,
+		cid: "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	};
+	const record = publicRsvp(event, "coming");
+	db.setPublication(did, { rkey: "3mabc23456722", event, status: "uncertain", records: [record] });
+	await db.oauthStore("tokens", 86400000).set(did, {});
+	const subject =
+		kind === "extra"
+			? { ...event, annotation: "belongs to another client" }
+			: kind === "array"
+				? []
+				: null;
+	const fetchHandler = vi.fn(async (_path: string) =>
+		Response.json({ cid: "foreigncid", value: { ...record, subject } }),
+	);
+	vi.spyOn(NodeOAuthClient.prototype, "restore").mockResolvedValue({
+		did,
+		getTokenInfo: async () => ({ scope: `atproto ${RSVP_SCOPE}` }),
+		fetchHandler,
+	} as never);
+	const oauth = await createOAuth("http://127.0.0.1:3000", dir, db, true);
+	expect(await oauth.rsvp?.(did, "3mabc23456722", null)).toEqual({ ok: false, reason: "conflict" });
+	expect(fetchHandler).toHaveBeenCalledTimes(1);
+	expect(fetchHandler.mock.calls[0]?.[0]).toContain("/xrpc/com.atproto.repo.getRecord?");
 });
 it("uses the real SDK's wrapped missing-handle error without any network calls", async () => {
 	const network = vi.fn(() => {

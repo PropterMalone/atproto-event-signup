@@ -183,6 +183,20 @@ async function load() {
 	const nextState = (await api("/api/me")) as ClientState;
 	if (generation !== loadGeneration) return;
 	state = nextState;
+	const publicOption = visibilitySelect.querySelector<HTMLOptionElement>('option[value="public"]');
+	if (publicOption) publicOption.disabled = state.publicAttendance === false;
+	element("authorize-publication").hidden = !state.profile || !state.publicAttendance;
+	element("retry-publication").hidden =
+		!state.publication || ["published", "withdrawn"].includes(state.publication.status);
+	element("publication-status").textContent = !state.publication
+		? state.publicAttendance === false
+			? "Public protocol attendance is unavailable for this event."
+			: ""
+		: state.publication.status === "published"
+			? "Public RSVP confirmed in your repository. Other services may retain copies."
+			: state.publication.status === "withdrawn"
+				? "This app’s public RSVP removal was confirmed. External copies may remain."
+				: "Your local choices are saved. Public RSVP update or withdrawal is NOT confirmed; the previous public record may remain. Authorize public attendance if needed, then retry. If another app changed the record, manage it in your repository; this app will not overwrite it.";
 	savedSummary();
 	visibilitySelect.value = storedVisibility(state.response?.visibility);
 	element<HTMLButtonElement>("save-visibility").disabled = !state.response;
@@ -334,6 +348,38 @@ element<HTMLFormElement>("response").addEventListener("submit", async (event) =>
 		await load();
 		if (account !== accountGeneration) return;
 		status.textContent = "Signup saved. Return here to change or delete it.";
+	} catch (error) {
+		if (account === accountGeneration) message(error);
+	}
+});
+element("authorize-publication").addEventListener("click", async () => {
+	const account = accountGeneration;
+	try {
+		if (
+			!state.profile ||
+			!confirm(
+				"Authorize this app to create, update, and delete calendar RSVP records in your public repository? Saving Public publishes attendance; other audiences stay local. Copies may persist elsewhere.",
+			)
+		)
+			return;
+		const result = await api("/oauth/login", "POST", {
+			handle: state.profile.handle,
+			publicAttendance: true,
+		});
+		if (account !== accountGeneration) return;
+		location.assign(result.url);
+	} catch (error) {
+		if (account === accountGeneration) message(error);
+	}
+});
+element("retry-publication").addEventListener("click", async () => {
+	const account = accountGeneration;
+	try {
+		await api("/api/publication", "POST", { expectedVersion: state.responseVersion });
+		if (account !== accountGeneration) return;
+		await load();
+		if (account !== accountGeneration) return;
+		status.textContent = "Local signup unchanged. Check the public RSVP status above.";
 	} catch (error) {
 		if (account === accountGeneration) message(error);
 	}

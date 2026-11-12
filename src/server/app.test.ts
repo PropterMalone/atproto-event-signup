@@ -2,12 +2,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { OAuthResolverError } from "@atproto/oauth-client-node";
+import { NodeOAuthClient, OAuthResolverError } from "@atproto/oauth-client-node";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buttonApproval, defaultButtonLabel } from "../shared/button.js";
 import { type AppConfig, createApp } from "./app.js";
 import { readAdminDids } from "./config.js";
-import type { OAuthBoundary } from "./oauth.js";
+import { createOAuth, type OAuthBoundary } from "./oauth.js";
+import { RSVP_SCOPE } from "./publication.js";
 import { Store } from "./store.js";
 
 const admin = "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -19,7 +20,15 @@ let config: AppConfig;
 let binding = "";
 let identity = "did:plc:alice";
 let avatar = "data:image/png;base64,AA==";
+const remote = vi.fn(async (_did: string, _rkey: string, _record: unknown) => ({
+	ok: true as const,
+}));
+const eventRef = {
+	uri: "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/community.lexicon.calendar.event/3mabc23456722",
+	cid: "bafyreiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+};
 const oauth: OAuthBoundary = {
+	rsvp: remote,
 	metadata: { scope: "atproto" },
 	jwks: { keys: [] },
 	authorize: async (_handle, value) => {
@@ -35,6 +44,7 @@ const oauth: OAuthBoundary = {
 	},
 };
 beforeEach(async () => {
+	remote.mockReset().mockResolvedValue({ ok: true });
 	directory = mkdtempSync(join(tmpdir(), "dcbsky-http-"));
 	db = new Store(join(directory, "test.sqlite"));
 	config = {
@@ -106,6 +116,348 @@ async function request(
 		...(body === undefined ? {} : { body: JSON.stringify(body) }),
 	});
 }
+it("retains ownership when a timed-out put materializes after an absent withdrawal read", async () => {
+	config.publicEvent = eventRef;
+	const cookie = await login();
+	const me = await state(cookie);
+	let lateRecord: unknown;
+	let materialized = false;
+	const fetchHandler = vi.fn(async (path: string, init?: RequestInit) => {
+		if (path.includes("getRecord"))
+			return materialized
+				? Response.json({ cid: "latecid", value: lateRecord })
+				: Response.json({ error: "RecordNotFound" }, { status: 400 });
+		if (path.endsWith("putRecord")) {
+			expect(db.publication(me.profile.did)).toMatchObject({
+				unresolvedPut: true,
+				status: "uncertain",
+			});
+			lateRecord = JSON.parse(String(init?.body)).record;
+			throw Error("client timeout; request still processing at PDS");
+		}
+		materialized = false;
+		return Response.json({});
+	});
+	const restore = vi.spyOn(NodeOAuthClient.prototype, "restore").mockResolvedValue({
+		did: me.profile.did,
+		getTokenInfo: async () => ({ scope: `atproto ${RSVP_SCOPE}` }),
+		fetchHandler,
+	} as never);
+	const realOAuth = await createOAuth("http://127.0.0.1:3000", directory, db, true);
+	const rsvp = vi.spyOn(oauth, "rsvp").mockImplementation((...args) => {
+		if (!realOAuth.rsvp) throw Error("missing SDK wrapper");
+		return realOAuth.rsvp(...args);
+	});
+	try {
+		await db.oauthStore("tokens", 86400000).set(me.profile.did, {});
+		expect(
+			(
+				await request(
+					"/api/response",
+					"PUT",
+					{ attendance: "coming", button: null, visibility: "public" },
+					cookie,
+					me.csrf,
+				)
+			).status,
+		).toBe(200);
+		expect((await state(cookie)).publication.status).toBe("uncertain");
+		expect(
+			(
+				await request(
+					"/api/signup",
+					"DELETE",
+					{ expectedVersion: (await state(cookie)).responseVersion },
+					cookie,
+					me.csrf,
+				)
+			).status,
+		).toBe(200);
+		expect((await state(cookie)).publication.status).toBe("uncertain");
+		expect(db.publication(me.profile.did)?.records).toEqual([lateRecord]);
+		materialized = true;
+		const before = fetchHandler.mock.calls.length;
+		expect(
+			(
+				await request(
+					"/api/publication",
+					"POST",
+					{ expectedVersion: (await state(cookie)).responseVersion },
+					cookie,
+					me.csrf,
+				)
+			).status,
+		).toBe(200);
+		expect(fetchHandler.mock.calls.slice(before).map(([path]) => path.split("?")[0])).toEqual([
+			"/xrpc/com.atproto.repo.getRecord",
+			"/xrpc/com.atproto.repo.deleteRecord",
+		]);
+		expect(materialized).toBe(false);
+		// Acknowledged removal of one late value cannot bound other delayed requests.
+		expect((await state(cookie)).publication.status).toBe("uncertain");
+		expect(db.publication(me.profile.did)?.records).toEqual([lateRecord]);
+		const afterDelete = fetchHandler.mock.calls.length;
+		await request(
+			"/api/publication",
+			"POST",
+			{ expectedVersion: (await state(cookie)).responseVersion },
+			cookie,
+			me.csrf,
+		);
+		expect(fetchHandler.mock.calls.length).toBe(afterDelete + 1);
+		expect((await state(cookie)).publication.status).toBe("uncertain");
+		expect(db.publication(me.profile.did)).toMatchObject({
+			unresolvedPut: true,
+			records: [lateRecord],
+		});
+	} finally {
+		rsvp.mockRestore();
+		restore.mockRestore();
+	}
+});
+it("publishes only explicit public mutations and withdraws the same owned record", async () => {
+	config.publicEvent = eventRef;
+	const cookie = await login();
+	const me = await state(cookie);
+	await request("/api/me", "GET", undefined, cookie);
+	expect(remote).not.toHaveBeenCalled();
+	for (const [attendance, status] of [
+		["coming", "going"],
+		["maybe", "interested"],
+		["cant", "notgoing"],
+	]) {
+		const result = await request(
+			"/api/response",
+			"PUT",
+			{ attendance, button: null, visibility: "public", futureMeetups: true },
+			cookie,
+			me.csrf,
+		);
+		expect(result.status).toBe(200);
+		expect(remote).toHaveBeenLastCalledWith(
+			"did:plc:alice",
+			expect.stringMatching(/^[234567a-z]{13}$/),
+			{
+				$type: "community.lexicon.calendar.rsvp",
+				subject: eventRef,
+				status: `community.lexicon.calendar.rsvp#${status}`,
+			},
+		);
+	}
+	const key = remote.mock.calls[0]?.[1];
+	expect(remote.mock.calls.every((call) => call[1] === key)).toBe(true);
+	const current = await state(cookie);
+	const narrowed = await request(
+		"/api/visibility",
+		"PUT",
+		{ visibility: "private", expectedVersion: current.responseVersion },
+		cookie,
+		me.csrf,
+	);
+	expect(narrowed.status).toBe(200);
+	expect(remote).toHaveBeenLastCalledWith("did:plc:alice", key, null);
+	expect((await state(cookie)).publication.status).toBe("withdrawn");
+});
+it("fails closed without an event, rejects forged identities, and exposes ambiguous withdrawal for retry", async () => {
+	const cookie = await login();
+	const me = await state(cookie);
+	expect(
+		(
+			await request(
+				"/api/response",
+				"PUT",
+				{ attendance: "coming", button: null, visibility: "public" },
+				cookie,
+				me.csrf,
+			)
+		).status,
+	).toBe(409);
+	expect(remote).not.toHaveBeenCalled();
+	config.publicEvent = eventRef;
+	expect(
+		(
+			await request(
+				"/api/response",
+				"PUT",
+				{ attendance: "coming", button: null, visibility: "public", did: "did:plc:someoneelse" },
+				cookie,
+				me.csrf,
+			)
+		).status,
+	).toBe(400);
+	await request(
+		"/api/response",
+		"PUT",
+		{ attendance: "coming", button: null, visibility: "public" },
+		cookie,
+		me.csrf,
+	);
+	remote.mockRejectedValueOnce(Error("network disconnected"));
+	const result = await request(
+		"/api/signup",
+		"DELETE",
+		{ expectedVersion: (await state(cookie)).responseVersion },
+		cookie,
+		me.csrf,
+	);
+	expect(result.status).toBe(200);
+	const after = await state(cookie);
+	expect(after.response).toBeNull();
+	expect(after.publication.status).toBe("uncertain");
+	expect(
+		(
+			await request(
+				"/api/publication",
+				"POST",
+				{ expectedVersion: after.responseVersion },
+				cookie,
+				me.csrf,
+			)
+		).status,
+	).toBe(200);
+	expect((await state(cookie)).publication.status).toBe("withdrawn");
+	expect(
+		(
+			await request(
+				"/api/publication",
+				"POST",
+				{ expectedVersion: after.responseVersion },
+				"",
+				me.csrf,
+			)
+		).status,
+	).toBe(401);
+	expect(
+		(
+			await request(
+				"/api/publication",
+				"POST",
+				{ expectedVersion: after.responseVersion },
+				cookie,
+				"wrong",
+			)
+		).status,
+	).toBe(403);
+});
+it("serializes public writes per attendee and rejects stale concurrent narrowing", async () => {
+	config.publicEvent = eventRef;
+	const cookie = await login();
+	const me = await state(cookie);
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	remote.mockImplementationOnce(async () => {
+		await gate;
+		return { ok: true };
+	});
+	const pending = request(
+		"/api/response",
+		"PUT",
+		{ attendance: "coming", button: null, visibility: "public" },
+		cookie,
+		me.csrf,
+	);
+	await vi.waitFor(() => expect(remote).toHaveBeenCalledTimes(1));
+	const current = await state(cookie);
+	expect(
+		(
+			await request(
+				"/api/visibility",
+				"PUT",
+				{ visibility: "private", expectedVersion: current.responseVersion },
+				cookie,
+				me.csrf,
+			)
+		).status,
+	).toBe(409);
+	release();
+	expect((await pending).status).toBe(200);
+	expect(
+		(
+			await request(
+				"/api/visibility",
+				"PUT",
+				{ visibility: "private", expectedVersion: me.responseVersion },
+				cookie,
+				me.csrf,
+			)
+		).status,
+	).toBe(409);
+	expect(
+		(
+			await request(
+				"/api/visibility",
+				"PUT",
+				{ visibility: "private", expectedVersion: current.responseVersion },
+				cookie,
+				me.csrf,
+			)
+		).status,
+	).toBe(200);
+	expect(remote).toHaveBeenLastCalledWith("did:plc:alice", expect.any(String), null);
+});
+it("matches local/private/public reference state over bounded generated edit/delete/retry histories", async () => {
+	config.publicEvent = eventRef;
+	const cookie = await login();
+	const me = await state(cookie);
+	let seed = 17031;
+	let owned = false;
+	for (let step = 0; step < 24; step++) {
+		seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+		const operation = step % 6;
+		const current = await state(cookie);
+		const before = remote.mock.calls.length;
+		if (operation === 0) {
+			await request(
+				"/api/signup",
+				"DELETE",
+				{ expectedVersion: current.responseVersion },
+				cookie,
+				me.csrf,
+			);
+			if (owned) expect(remote).toHaveBeenLastCalledWith("did:plc:alice", expect.any(String), null);
+		} else {
+			const visibility =
+				operation === 1 || operation === 2
+					? "public"
+					: ["private", "loggedin", "followers", "following", "either", "mutuals", "public"][
+							(seed >>> 8) % 7
+						];
+			const attendance = ["coming", "maybe", "cant", null][operation % 4];
+			expect(
+				(
+					await request(
+						"/api/response",
+						"PUT",
+						{ attendance, visibility, button: null },
+						cookie,
+						me.csrf,
+					)
+				).status,
+			).toBe(200);
+			const shouldPublish = visibility === "public" && attendance !== null;
+			if (shouldPublish) owned = true;
+			if (owned) {
+				const call = remote.mock.calls.at(-1);
+				expect(call?.[2] !== null).toBe(shouldPublish);
+				if (shouldPublish)
+					expect(call?.[2]).toMatchObject({
+						subject: eventRef,
+						status: {
+							coming: "community.lexicon.calendar.rsvp#going",
+							maybe: "community.lexicon.calendar.rsvp#interested",
+							cant: "community.lexicon.calendar.rsvp#notgoing",
+						}[attendance as "coming"],
+					});
+			} else expect(remote.mock.calls.length).toBe(before);
+		}
+		const calls = remote.mock.calls.length;
+		await state(cookie);
+		await request("/api/directory");
+		expect(remote.mock.calls.length).toBe(calls);
+	}
+});
 it("serves only filtered directory fields and ignores forged viewer identities", async () => {
 	for (const [did, visibility, attendance] of [
 		["public", "public", "maybe"],
@@ -186,6 +538,7 @@ it("omits a directory entry withdrawn while relationship lookup is pending", asy
 	expect((await (await pending).json()).entries).toEqual([]);
 });
 it("allows privacy-only withdrawal after all cutoffs without artwork approval and rejects csrf/stale/invalid input", async () => {
+	config.publicEvent = eventRef;
 	const cookie = await login();
 	const { csrf } = await state(cookie);
 	await request(
@@ -268,7 +621,7 @@ describe("HTTP identity and privacy", () => {
 		const spy = vi.spyOn(oauth, "authorize");
 		try {
 			expect((await request("/oauth/login", "POST", { handle: input })).status).toBe(303);
-			expect(spy).toHaveBeenCalledWith(expected, expect.any(String));
+			expect(spy).toHaveBeenCalledWith(expected, expect.any(String), false);
 		} finally {
 			spy.mockRestore();
 		}

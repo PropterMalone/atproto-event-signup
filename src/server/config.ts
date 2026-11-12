@@ -1,4 +1,23 @@
 import { validateOrigin } from "./policy.js";
+import type { EventReference } from "./publication.js";
+
+export function readPublicEvent(env: NodeJS.ProcessEnv): EventReference | null {
+	const uri = env.PUBLIC_EVENT_URI?.trim();
+	const cid = env.PUBLIC_EVENT_CID?.trim();
+	if (!uri && !cid) return null;
+	if (
+		!uri ||
+		!cid ||
+		!/^at:\/\/did:(?:plc:[a-z2-7]{24}|web:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\/community\.lexicon\.calendar\.event\/[234567abcdefghij][234567a-z]{12}$/.test(
+			uri,
+		) ||
+		!/^bafyre[i-p][a-z2-7]{51}[aeimquy4]$/.test(cid)
+	)
+		throw Error(
+			"PUBLIC_EVENT_URI and PUBLIC_EVENT_CID require a DID-based calendar event AT URI with TID key and a dag-cbor SHA-256 CID",
+		);
+	return { uri, cid };
+}
 
 export function readAdminDids(env: NodeJS.ProcessEnv): Set<string> {
 	const value = env.ADMIN_DIDS?.trim();

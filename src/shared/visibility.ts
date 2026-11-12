@@ -1,7 +1,7 @@
 export const visibilityLabels = {
 	private: "Private — only me and organizers",
 	loggedin: "Anyone signed in",
-	public: "Everyone, including signed-out visitors",
+	public: "Public — publish attendance in my repository",
 	followers: "People who follow me",
 	following: "People I follow",
 	either: "People I follow or who follow me",

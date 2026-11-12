@@ -18,6 +18,13 @@ import { attendanceDirectory, type RelationshipLookup } from "./directory.js";
 import type { OAuthBoundary } from "./oauth.js";
 import { parseResponse } from "./policy.js";
 import { printSheet } from "./print.js";
+import {
+	type EventReference,
+	ownedTid,
+	type Publication,
+	type PublicationResult,
+	publicRsvp,
+} from "./publication.js";
 import { publicRelationshipBatch } from "./relationships.js";
 import {
 	artworkSource,
@@ -27,6 +34,7 @@ import {
 } from "./request-identity.js";
 import type { Store } from "./store.js";
 export interface AppConfig {
+	publicEvent?: EventReference | null;
 	origin: string;
 	adminDids: Set<string>;
 	responseCutoff: number | null;
@@ -72,6 +80,59 @@ async function jsonBody(req: IncomingMessage): Promise<unknown> {
 	}
 }
 export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
+	const busy = new Set<string>();
+	async function syncPublication(did: string, explicitlyPublic: boolean) {
+		const row = db.get(did);
+		const previous = db.publication(did);
+		const desired =
+			(explicitlyPublic || !!previous) &&
+			row?.visibility === "public" &&
+			row.attendance &&
+			config.publicEvent
+				? publicRsvp(config.publicEvent, row.attendance)
+				: null;
+		if (!previous && !desired) return null;
+		const publication: Publication = previous ?? {
+			rkey: ownedTid(),
+			event: config.publicEvent as EventReference,
+			status: "uncertain",
+			records: [],
+		};
+		if (desired && publication.event.uri !== desired.subject.uri)
+			throw new RequestError(
+				409,
+				"Event changed; withdraw the previous public RSVP before changing event configuration.",
+			);
+		if (
+			desired &&
+			!publication.records.some((record) => JSON.stringify(record) === JSON.stringify(desired))
+		)
+			publication.records.push(desired);
+		publication.status = "uncertain";
+		db.setPublication(did, publication);
+		const version = db.version(did);
+		let result: PublicationResult;
+		try {
+			result = oauth.rsvp
+				? await oauth.rsvp(did, publication.rkey, desired)
+				: { ok: false as const, reason: "reauthorize" as const };
+		} catch {
+			result = { ok: false as const, reason: "uncertain" as const };
+		}
+		publication.unresolvedPut = db.publication(did)?.unresolvedPut ?? false;
+		publication.status =
+			db.version(did) !== version || publication.unresolvedPut
+				? "uncertain"
+				: result.ok
+					? desired
+						? "published"
+						: "withdrawn"
+					: result.reason;
+		if (result.ok && publication.status !== "uncertain")
+			publication.records = desired ? [desired] : [];
+		db.setPublication(did, publication);
+		return { status: publication.status };
+	}
 	const environmentProxy = proxyFromEnvironment();
 	const lookup = config.relationshipLookup;
 	const batchLookup = lookup ? undefined : publicRelationshipBatch();
@@ -110,6 +171,7 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 			res.setHeader("Location", url);
 			res.end();
 		};
+		let lockedDid: string | null = null;
 		try {
 			if ((req.url?.length ?? 0) > 4096) throw new RequestError(414, "URL too long");
 			const url = new URL(req.url ?? "/", config.origin);
@@ -132,10 +194,19 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 					body && typeof body === "object" && "handle" in body ? body.handle : null,
 				);
 				if ("error" in input) throw new RequestError(400, input.error);
+				const wantsPublic =
+					!!body &&
+					typeof body === "object" &&
+					"publicAttendance" in body &&
+					body.publicAttendance === true;
+				if (wantsPublic && (!session || req.headers["x-csrf-token"] !== session.csrf))
+					throw new RequestError(403, "Sign in and refresh before authorizing public attendance");
+				if (wantsPublic && !config.publicEvent)
+					throw new RequestError(409, "Public attendance is not configured");
 				const binding = randomBytes(32).toString("base64url");
 				let target: URL;
 				try {
-					target = await oauth.authorize(input.handle, binding);
+					target = await oauth.authorize(input.handle, binding, wantsPublic);
 				} catch (error) {
 					// Only the SDK's known missing-handle result is a spelling error, not every resolver failure.
 					const cause = error instanceof OAuthResolverError ? error.cause : error;
@@ -151,7 +222,10 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 					}
 					throw error;
 				}
-				await db.oauthStore<{ pending: true }>("binding", 600000).set(binding, { pending: true });
+				await db.oauthStore<{ pending: true; did?: string }>("binding", 600000).set(binding, {
+					pending: true,
+					...(wantsPublic && session ? { did: session.profile.did } : {}),
+				});
 				res.setHeader("Set-Cookie", setCookie("dcbsky_login", binding, 600));
 				if (req.headers.accept === "application/json") return send(200, { url: target.toString() });
 				return redirect(target.toString());
@@ -159,13 +233,15 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 			if (url.pathname === "/oauth/callback" && method === "GET") {
 				rate(peer, "callback", 20);
 				const binding = cookie(req, "dcbsky_login");
-				const store = db.oauthStore<{ pending: true }>("binding", 600000);
-				if (!binding || !(await store.get(binding)))
+				const store = db.oauthStore<{ pending: true; did?: string }>("binding", 600000);
+				const pending = await store.get(binding);
+				if (!binding || !pending)
 					throw new RequestError(400, "Login expired or browser mismatch. Start sign-in again.");
 				await store.del(binding);
 				try {
 					const result = await oauth.complete(url.searchParams);
-					if (result.binding !== binding) throw new Error("binding mismatch");
+					if (result.binding !== binding || (pending.did && result.profile.did !== pending.did))
+						throw new Error("binding mismatch");
 					if (token) db.deleteSession(token);
 					const fresh = db.createSession(result.profile, now);
 					res.setHeader("Set-Cookie", [
@@ -210,6 +286,11 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 				const response = session ? db.get(session.profile.did) : null;
 				const state: ClientState = {
 					share: { url: `${config.origin}/` },
+					publicAttendance: !!config.publicEvent,
+					publication:
+						session && db.publication(session.profile.did)
+							? { status: db.publication(session.profile.did)?.status ?? "uncertain" }
+							: null,
 					profile: session?.profile ?? null,
 					csrf: session?.csrf ?? "",
 					response,
@@ -232,6 +313,39 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 				if (!session) throw new RequestError(401, "Sign in with Bluesky first");
 				if (method !== "GET" && req.headers["x-csrf-token"] !== session.csrf)
 					throw new RequestError(403, "Refresh the page and try again");
+				if (
+					method !== "GET" &&
+					[
+						"/api/response",
+						"/api/signup",
+						"/api/visibility",
+						"/api/preferences",
+						"/api/publication",
+					].includes(url.pathname)
+				) {
+					if (busy.has(session.profile.did))
+						throw new RequestError(409, "A response change is in progress. Reload and retry.");
+					lockedDid = session.profile.did;
+					busy.add(lockedDid);
+				}
+				if (url.pathname === "/api/publication" && method === "POST") {
+					const body = await jsonBody(req);
+					if (
+						!body ||
+						typeof body !== "object" ||
+						Object.keys(body).length !== 1 ||
+						!("expectedVersion" in body) ||
+						body.expectedVersion !== db.version(session.profile.did)
+					)
+						throw new RequestError(409, "Response changed. Reload before retrying publication.");
+					if (!db.session(token, Date.now())) throw new RequestError(401, "Sign in again");
+					const previous = db.publication(session.profile.did);
+					if (!previous) throw new RequestError(409, "Save your public choice explicitly first.");
+					return send(200, {
+						ok: true,
+						publication: await syncPublication(session.profile.did, true),
+					});
+				}
 				if (url.pathname.startsWith("/api/admin")) {
 					if (!config.adminDids.has(session.profile.did))
 						throw new RequestError(403, "Operator access required");
@@ -306,7 +420,10 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 						throw new RequestError(400, "Expected response version");
 					if (!db.cancel(session.profile.did, body.expectedVersion, url.pathname === "/api/signup"))
 						throw conflict();
-					return send(200, { ok: true });
+					return send(200, {
+						ok: true,
+						publication: await syncPublication(session.profile.did, false),
+					});
 				}
 				if (url.pathname === "/api/visibility" && method === "PUT") {
 					const body = await jsonBody(req);
@@ -320,9 +437,17 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 						fields.expectedVersion.length > 64
 					)
 						throw new RequestError(400, "Invalid visibility fields");
+					if (fields.visibility === "public" && !config.publicEvent)
+						throw new RequestError(
+							409,
+							"Public protocol attendance is not configured. Choose another audience.",
+						);
 					if (!db.setVisibility(session.profile.did, fields.visibility, fields.expectedVersion))
 						throw conflict();
-					return send(200, { ok: true });
+					return send(200, {
+						ok: true,
+						publication: await syncPublication(session.profile.did, fields.visibility === "public"),
+					});
 				}
 				if (url.pathname === "/api/response" && method === "PUT") {
 					const body = await jsonBody(req);
@@ -408,9 +533,18 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 							409,
 							"No supported profile image is available. You can save attendance without a button.",
 						);
+					if (input.visibility === "public" && !config.publicEvent)
+						throw new RequestError(
+							409,
+							"Public protocol attendance is not configured. Choose another audience.",
+						);
+					if (!db.session(token, Date.now())) throw new RequestError(401, "Sign in again");
 					const saved = db.save(session.profile, input, now, expectedVersion);
 					if (!saved) throw conflict();
-					return send(200, saved);
+					return send(200, {
+						...saved,
+						publication: await syncPublication(session.profile.did, input.visibility === "public"),
+					});
 				}
 			}
 			const publicAssets: Record<string, { file: string; type: string }> = {
@@ -438,6 +572,8 @@ export function createApp(db: Store, oauth: OAuthBoundary, config: AppConfig) {
 		} catch (error) {
 			if (error instanceof RequestError) return send(error.status, { error: error.message });
 			return send(503, { error: "Service temporarily unavailable. Try again." });
+		} finally {
+			if (lockedDid) busy.delete(lockedDid);
 		}
 	};
 }

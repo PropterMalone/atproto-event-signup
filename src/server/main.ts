@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApp } from "./app.js";
-import { readAdminDids, readPolicyConfig } from "./config.js";
+import { readAdminDids, readPolicyConfig, readPublicEvent } from "./config.js";
 import { createOAuth } from "./oauth.js";
 import { Store } from "./store.js";
 
@@ -30,8 +30,10 @@ mkdirSync(directory, { recursive: true, mode: 0o700 });
 chmodSync(directory, 0o700);
 const db = new Store(resolve(directory, "app.sqlite"));
 chmodSync(db.path, 0o600);
-const oauth = await createOAuth(origin, directory, db);
+const publicEvent = readPublicEvent(process.env);
+const oauth = await createOAuth(origin, directory, db, !!publicEvent);
 const config = {
+	publicEvent,
 	origin,
 	adminDids,
 	responseCutoff,

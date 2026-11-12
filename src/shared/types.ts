@@ -53,6 +53,10 @@ export interface Session {
 	expires: number;
 }
 export interface ClientState {
+	publicAttendance?: boolean;
+	publication?: {
+		status: "published" | "withdrawn" | "uncertain" | "reauthorize" | "conflict";
+	} | null;
 	share?: { url: string };
 	profile: Profile | null;
 	csrf: string;

@@ -11,6 +11,7 @@ import type {
 } from "../shared/types.js";
 
 import { type AttendanceVisibility, storedVisibility } from "../shared/visibility.js";
+import type { Publication } from "./publication.js";
 
 const normalizeResponse = (value: string): SavedResponse => {
 	const row = JSON.parse(value) as SavedResponse;
@@ -23,6 +24,7 @@ export class Store {
 		this.db = new DatabaseSync(path);
 		this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
    CREATE TABLE IF NOT EXISTS responses(did TEXT PRIMARY KEY, value TEXT NOT NULL);
+   CREATE TABLE IF NOT EXISTS publications(did TEXT PRIMARY KEY, value TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS future_contacts(did TEXT PRIMARY KEY, handle TEXT NOT NULL, opted_at INTEGER NOT NULL);
    CREATE TABLE IF NOT EXISTS response_versions(subject TEXT PRIMARY KEY, version TEXT NOT NULL);
    CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY, value TEXT NOT NULL, expires INTEGER NOT NULL);
@@ -30,6 +32,17 @@ export class Store {
 	}
 	close() {
 		this.db.close();
+	}
+	publication(did: string): Publication | null {
+		const row = this.db.prepare("SELECT value FROM publications WHERE did=?").get(did);
+		return row ? (JSON.parse(String(row.value)) as Publication) : null;
+	}
+	setPublication(did: string, value: Publication) {
+		this.db
+			.prepare(
+				"INSERT INTO publications VALUES(?,?) ON CONFLICT(did) DO UPDATE SET value=excluded.value",
+			)
+			.run(did, JSON.stringify(value));
 	}
 	get(did: string): SavedResponse | null {
 		const row = this.db.prepare("SELECT value FROM responses WHERE did=?").get(did);
